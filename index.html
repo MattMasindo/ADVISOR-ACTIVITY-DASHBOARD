@@ -85,7 +85,7 @@ function App() {
   const [myIdentity, setMyIdentity] = useState(lget("my-identity"));
   const [roster, setRoster] = useState([]);
   const [targets, setTargets] = useState({});
-  const [managerPin, setManagerPin] = useState(null);
+  const [hasManagerPin, setHasManagerPin] = useState(false);
   const [isManager, setIsManager] = useState(!!lget("is-manager"));
   const [myEntries, setMyEntries] = useState({});
   const [teamEntries, setTeamEntries] = useState([]);
@@ -98,11 +98,11 @@ function App() {
 
   useEffect(() => {
     (async () => {
-      const [{ data: rosterData, error: e1 }, { data: targetData, error: e2 }, { data: settingsData, error: e3 }] =
+      const [{ data: rosterData, error: e1 }, { data: targetData, error: e2 }, { data: hasPinData, error: e3 }] =
         await Promise.all([
           sb.from("advisors").select("*").order("name"),
           sb.from("targets").select("*"),
-          sb.from("settings").select("*").eq("key", "manager_pin"),
+          sb.rpc("has_manager_pin"),
         ]);
       if (e1 || e2 || e3) {
         setDbError("Couldn't reach the database. Check that your Supabase URL and key are filled in at the top of index.html, and that schema.sql has been run.");
@@ -113,7 +113,7 @@ function App() {
       const tMap = {};
       (targetData || []).forEach((t) => (tMap[t.stage] = t.daily_target));
       setTargets(tMap);
-      setManagerPin(settingsData && settingsData[0] ? settingsData[0].value : null);
+      setHasManagerPin(!!hasPinData);
 
       if (myIdentity) {
         const { data } = await sb.from("entries").select("*").eq("advisor_code", myIdentity.code);
@@ -188,14 +188,16 @@ function App() {
   };
 
   const unlockManager = async (pin) => {
-    if (!managerPin) {
-      await sb.from("settings").upsert({ key: "manager_pin", value: pin }, { onConflict: "key" });
-      setManagerPin(pin);
+    if (!hasManagerPin) {
+      const { data: setOk } = await sb.rpc("set_manager_pin_if_unset", { p_pin: pin });
+      if (!setOk) return false; // someone else set it a moment before you — ask them to re-enter as a login instead
+      setHasManagerPin(true);
       setIsManager(true); lset("is-manager", true);
       setShowManagerGate(false); setView("manager");
       return true;
     }
-    if (pin === managerPin) {
+    const { data: matches } = await sb.rpc("check_manager_pin", { p_candidate: pin });
+    if (matches) {
       setIsManager(true); lset("is-manager", true);
       setShowManagerGate(false); setView("manager");
       return true;
@@ -286,7 +288,7 @@ function App() {
           )}
         </div>
       )}
-      {showManagerGate && <ManagerGate hasPin={!!managerPin} onSubmit={unlockManager} onClose={() => setShowManagerGate(false)} />}
+      {showManagerGate && <ManagerGate hasPin={hasManagerPin} onSubmit={unlockManager} onClose={() => setShowManagerGate(false)} />}
     </div>
   );
 }
@@ -335,321 +337,4 @@ function Onboarding({ roster, onChoose, onCreate, cancelable, onCancel }) {
           <div style={{ color: COLORS.ink }} className="font-display text-3xl">Set up your log</div>
         </div>
         <div className="space-y-2">
-          <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Full name"
-            style={{ borderColor: COLORS.line, background: COLORS.card, color: COLORS.ink }} className="w-full px-4 py-3 rounded-2xl border outline-none focus:ring-2" />
-          <input value={newCode} onChange={(e) => setNewCode(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submitNew()} placeholder="Advisor code"
-            style={{ borderColor: COLORS.line, background: COLORS.card, color: COLORS.ink }} className="w-full px-4 py-3 rounded-2xl border outline-none focus:ring-2 font-mono" />
-          {error && <div style={{ color: COLORS.rust }} className="text-xs">{error}</div>}
-          <div style={{ color: COLORS.slate }} className="text-[11px] leading-relaxed pt-1">Your code is also your login from now on — keep it to yourself.</div>
-          <button onClick={submitNew} style={{ background: COLORS.ink }} className="w-full py-3 rounded-2xl text-white font-medium mt-2">Create my log</button>
-        </div>
-        <button onClick={() => { setError(""); setMode("pick"); }} style={{ color: COLORS.slate }} className="mt-6 text-sm text-center underline">Back</button>
-      </div>
-    );
-  }
-  return (
-    <div className="max-w-md mx-auto min-h-screen flex flex-col justify-center px-6 py-10">
-      <div className="text-center mb-8">
-        <div style={{ color: COLORS.brass }} className="text-[11px] tracking-[0.25em] uppercase font-mono mb-2">Advisor Activity Ledger</div>
-        <div style={{ color: COLORS.ink }} className="font-display text-3xl">Who's logging in?</div>
-      </div>
-      {roster.length > 0 && (
-        <div className="space-y-2 mb-6">
-          {roster.map((r) => (
-            <button key={r.code} onClick={() => { setTarget(r); setPin(""); setError(""); setMode("pin"); }}
-              style={{ background: COLORS.card, borderColor: COLORS.line }} className="w-full text-left px-4 py-3.5 rounded-2xl border flex items-center justify-between">
-              <div style={{ color: COLORS.ink }} className="font-medium">{r.name}</div>
-            </button>
-          ))}
-        </div>
-      )}
-      <button onClick={() => { setError(""); setMode("new"); }} style={{ borderColor: COLORS.line, color: COLORS.ink }} className="w-full py-3.5 rounded-2xl border border-dashed font-medium text-sm">+ I'm new here</button>
-      {cancelable && <button onClick={onCancel} style={{ color: COLORS.slate }} className="mt-6 text-sm text-center underline">Cancel</button>}
-    </div>
-  );
-}
-
-function ManagerGate({ hasPin, onSubmit, onClose }) {
-  const [pin, setPin] = useState(""); const [confirm, setConfirm] = useState(""); const [error, setError] = useState("");
-  const submit = async () => {
-    if (!hasPin) {
-      if (!/^\d{4}$/.test(pin)) { setError("Choose a 4-digit PIN."); return; }
-      if (pin !== confirm) { setError("PINs don't match."); return; }
-      await onSubmit(pin);
-    } else {
-      const ok = await onSubmit(pin);
-      if (!ok) { setError("Incorrect PIN."); setPin(""); }
-    }
-  };
-  return (
-    <div className="fixed inset-0 flex items-center justify-center px-6" style={{ background: "rgba(31,61,52,0.55)" }}>
-      <div style={{ background: COLORS.card }} className="w-full max-w-sm rounded-3xl p-6 relative">
-        <button onClick={onClose} className="absolute top-4 right-4" style={{ color: COLORS.slate }}>✕</button>
-        <div style={{ color: COLORS.ink }} className="font-display text-xl mb-1">{hasPin ? "Manager access" : "Set up manager access"}</div>
-        <div style={{ color: COLORS.slate }} className="text-sm mb-4">{hasPin ? "Enter the manager PIN." : "Set this once — anyone with it can see every advisor's history."}</div>
-        <input value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))} inputMode="numeric" autoFocus placeholder="••••"
-          style={{ borderColor: COLORS.line, background: COLORS.parchment, color: COLORS.ink, letterSpacing: "0.5em" }}
-          className="w-full px-4 py-3 rounded-2xl border outline-none focus:ring-2 text-center text-xl font-mono mb-2" />
-        {!hasPin && (
-          <input value={confirm} onChange={(e) => setConfirm(e.target.value.replace(/\D/g, "").slice(0, 4))} onKeyDown={(e) => e.key === "Enter" && submit()} inputMode="numeric" placeholder="Confirm PIN"
-            style={{ borderColor: COLORS.line, background: COLORS.parchment, color: COLORS.ink, letterSpacing: "0.5em" }}
-            className="w-full px-4 py-3 rounded-2xl border outline-none focus:ring-2 text-center text-xl font-mono mb-2" />
-        )}
-        {error && <div style={{ color: COLORS.rust }} className="text-xs mb-2">{error}</div>}
-        <button onClick={submit} style={{ background: COLORS.ink }} className="w-full py-3 rounded-2xl text-white font-medium mt-2">{hasPin ? "Unlock" : "Set PIN & continue"}</button>
-      </div>
-    </div>
-  );
-}
-
-function LogView({ date, entry, pulse, targets, onBump, onToggleSocial, onNote, saveError }) {
-  const totalToday = entryTotal(entry);
-  const showNudge = new Date().getHours() >= 15 && totalToday === 0;
-  return (
-    <div className="px-5 mt-6">
-      <div style={{ color: COLORS.slate }} className="text-xs font-mono uppercase tracking-wide mb-4">{prettyDate(date)}</div>
-      {showNudge && <div style={{ background: "#FBEFE7", borderColor: COLORS.rust, color: COLORS.rust }} className="rounded-2xl border p-3.5 text-xs mb-4">Nothing logged today yet.</div>}
-      {saveError && <div style={{ background: "#FBEFE7", borderColor: COLORS.rust, color: COLORS.rust }} className="rounded-2xl border p-3 text-xs mb-4">Your last tap may not have saved — check your connection.</div>}
-      <div className="space-y-3">
-        {METRICS.map((m) => {
-          const val = entry[m.key] || 0, target = targets[m.key] || 0, met = target > 0 && val >= target;
-          return (
-            <div key={m.key} style={{ background: COLORS.card, borderColor: COLORS.line }} className="rounded-2xl border p-4 flex items-center justify-between">
-              <div>
-                <div style={{ color: COLORS.ink }} className="font-medium text-sm">{m.label}</div>
-                {target > 0 && <div style={{ color: met ? COLORS.good : COLORS.slate }} className="text-[10px] font-mono mt-0.5">target {target}{met ? " ✓" : ""}</div>}
-              </div>
-              <div className="flex items-center gap-3">
-                <button onClick={() => onBump(m.key, -1)} style={{ borderColor: COLORS.line, color: COLORS.slate }} className="w-9 h-9 rounded-full border flex items-center justify-center active:scale-95">–</button>
-                <div style={{ color: COLORS.ink }} className={`font-mono text-xl w-7 text-center ${pulse === m.key ? "pop" : ""}`}>{val}</div>
-                <button onClick={() => onBump(m.key, 1)} style={{ background: COLORS.brass }} className="w-9 h-9 rounded-full text-white flex items-center justify-center active:scale-95">+</button>
-              </div>
-            </div>
-          );
-        })}
-        <button onClick={onToggleSocial} style={{ background: entry.social ? COLORS.ink : COLORS.card, borderColor: entry.social ? COLORS.ink : COLORS.line }} className="w-full rounded-2xl border p-4 flex items-center justify-between">
-          <div style={{ color: entry.social ? "white" : COLORS.ink }} className="font-medium text-sm">Posted on social media today</div>
-          <div style={{ borderColor: entry.social ? COLORS.brass : COLORS.line, background: entry.social ? COLORS.brass : "transparent" }} className="w-6 h-6 rounded-md border-2" />
-        </button>
-        <div style={{ background: COLORS.card, borderColor: COLORS.line }} className="rounded-2xl border p-4">
-          <div style={{ color: COLORS.slate }} className="text-xs font-mono uppercase tracking-wide mb-2">Notes (optional)</div>
-          <textarea defaultValue={entry.note || ""} onBlur={(e) => onNote(e.target.value)} placeholder="Who did you talk to?"
-            style={{ borderColor: COLORS.line, background: COLORS.parchment, color: COLORS.ink }} className="w-full px-3 py-2.5 rounded-xl border outline-none focus:ring-2 text-sm resize-none" rows={2} />
-        </div>
-      </div>
-      <div style={{ color: COLORS.slate }} className="text-center text-xs mt-5 font-mono">Every tap saves instantly.</div>
-    </div>
-  );
-}
-
-function TrendChart({ data }) {
-  const w = 320, h = 160, pad = 24;
-  const max = Math.max(1, ...data.flatMap((d) => METRICS.map((m) => d[m.key] || 0)));
-  const x = (i) => pad + (i * (w - pad * 2)) / (data.length - 1);
-  const y = (v) => h - pad - (v / max) * (h - pad * 2);
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="w-full">
-      {METRICS.map((m) => (
-        <polyline key={m.key} fill="none" stroke={m.color} strokeWidth="2"
-          points={data.map((d, i) => `${x(i)},${y(d[m.key] || 0)}`).join(" ")} />
-      ))}
-      {data.map((d, i) => (
-        <text key={d.date} x={x(i)} y={h - 4} fontSize="9" fill={COLORS.slate} textAnchor="middle" fontFamily="IBM Plex Mono">{d.label}</text>
-      ))}
-    </svg>
-  );
-}
-
-function TeamView({ date, todayTotals, socialToday, teamCount, leaderboard, trendData, funnelData, myCode, loading, onRefresh }) {
-  const maxFunnel = Math.max(1, ...funnelData.map((f) => f.value));
-  return (
-    <div className="px-5 mt-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div style={{ color: COLORS.slate }} className="text-xs font-mono uppercase tracking-wide">{prettyDate(date)} · {teamCount} logged in</div>
-        <button onClick={onRefresh} style={{ color: COLORS.brass }} className="text-xs font-mono">{loading ? "…" : "refresh"}</button>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        {METRICS.map((m) => (
-          <div key={m.key} style={{ background: COLORS.card, borderColor: COLORS.line }} className="rounded-2xl border p-4">
-            <div style={{ color: COLORS.ink }} className="font-mono text-2xl">{todayTotals[m.key] || 0}</div>
-            <div style={{ color: COLORS.slate }} className="text-[11px] mt-0.5">{m.label}</div>
-          </div>
-        ))}
-      </div>
-      <div style={{ background: COLORS.ink }} className="rounded-2xl px-4 py-3 text-white text-sm">{socialToday} advisor{socialToday !== 1 ? "s" : ""} posted on social media today</div>
-      <div>
-        <SectionTitle label="Today's Funnel" />
-        <div style={{ background: COLORS.card, borderColor: COLORS.line }} className="rounded-2xl border p-4 space-y-2.5">
-          {funnelData.map((f) => (
-            <div key={f.key} className="flex items-center gap-3">
-              <div style={{ color: COLORS.slate }} className="text-xs w-24 shrink-0">{f.short}</div>
-              <div style={{ background: COLORS.parchment }} className="flex-1 h-6 rounded-full overflow-hidden">
-                <div style={{ width: `${(f.value / maxFunnel) * 100}%`, background: COLORS.brass, minWidth: f.value > 0 ? "8%" : "0%" }} className="h-full rounded-full" />
-              </div>
-              <div style={{ color: COLORS.ink }} className="font-mono text-sm w-6 text-right">{f.value}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div>
-        <SectionTitle label="This Week's Leaderboard" />
-        {leaderboard.length === 0 ? (
-          <div style={{ background: COLORS.card, borderColor: COLORS.line, color: COLORS.slate }} className="rounded-2xl border p-5 text-sm text-center">No activity logged yet this week.</div>
-        ) : (
-          <div style={{ background: COLORS.card, borderColor: COLORS.line }} className="rounded-2xl border divide-y">
-            {leaderboard.map((row, i) => (
-              <div key={row.code} style={{ borderColor: COLORS.line, background: row.code === myCode ? COLORS.parchment : "transparent" }} className="flex items-center gap-3 px-4 py-3">
-                <div style={{ background: i === 0 ? COLORS.brass : COLORS.parchment, color: i === 0 ? "white" : COLORS.slate }} className="font-mono text-xs w-6 h-6 rounded-full flex items-center justify-center shrink-0">{i + 1}</div>
-                <div style={{ color: COLORS.ink }} className="font-medium text-sm flex-1">{row.name}</div>
-                <div className="flex gap-3 font-mono text-xs" style={{ color: COLORS.slate }}>
-                  <span>{row.appts || 0} appt</span><span style={{ color: COLORS.brass, fontWeight: 600 }}>{row.closed || 0} closed</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-      <div>
-        <SectionTitle label="7-Day Trend — Team Totals" />
-        <div style={{ background: COLORS.card, borderColor: COLORS.line }} className="rounded-2xl border p-4">
-          <TrendChart data={trendData} />
-          <div className="flex flex-wrap gap-3 mt-2 justify-center">
-            {METRICS.map((m) => (
-              <div key={m.key} className="flex items-center gap-1.5">
-                <div style={{ background: m.color }} className="w-2.5 h-2.5 rounded-full" />
-                <span style={{ color: COLORS.slate }} className="text-[11px]">{m.short}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ManagerView({ date, roster, teamEntries, loading, onRefresh, missingToday, loggedTodayCount, targets, onSaveTargets }) {
-  const [selected, setSelected] = useState(null);
-  const [editingTargets, setEditingTargets] = useState(false);
-  const [draft, setDraft] = useState(targets);
-  const [showExport, setShowExport] = useState(false);
-  const csv = useMemo(() => {
-    const cutoff = todayStr(-59);
-    const header = ["Advisor", "Code", "Date", ...METRICS.map((m) => m.label), "Social", "Note"];
-    const rows = [header];
-    teamEntries.filter((e) => e.entry_date >= cutoff).sort((a, b) => a.entry_date < b.entry_date ? 1 : -1).forEach((e) => {
-      const advisor = roster.find((r) => r.code === e.advisor_code);
-      rows.push([advisor ? advisor.name : e.advisor_code, e.advisor_code, e.entry_date, ...METRICS.map((m) => e[m.key] || 0), e.social ? "yes" : "no", `"${(e.note || "").replace(/"/g, '""')}"`]);
-    });
-    return rows.map((r) => r.join(",")).join("\n");
-  }, [teamEntries, roster]);
-
-  return (
-    <div className="px-5 mt-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div style={{ color: COLORS.slate }} className="text-xs font-mono uppercase tracking-wide">Manager view</div>
-        <button onClick={onRefresh} style={{ color: COLORS.brass }} className="text-xs font-mono">{loading ? "…" : "refresh"}</button>
-      </div>
-      <div style={{ background: COLORS.ink }} className="rounded-2xl p-4 flex items-baseline justify-between">
-        <span className="text-white font-display text-2xl">{loggedTodayCount}/{roster.length}</span>
-        <span style={{ color: "rgba(255,255,255,0.6)" }} className="text-xs">logged something today</span>
-      </div>
-      <div>
-        <SectionTitle label="Not Logged Today" />
-        {missingToday.length === 0 ? (
-          <div style={{ background: COLORS.card, borderColor: COLORS.line, color: COLORS.good }} className="rounded-2xl border p-4 text-sm text-center">Everyone has logged something today.</div>
-        ) : (
-          <div style={{ background: COLORS.card, borderColor: COLORS.line }} className="rounded-2xl border divide-y">
-            {missingToday.map((r) => <div key={r.code} className="px-4 py-3 text-sm" style={{ color: COLORS.ink }}>{r.name}</div>)}
-          </div>
-        )}
-      </div>
-      <div>
-        <div className="flex items-center justify-between mb-2.5">
-          <SectionTitle label="Daily Targets" bare />
-          <button onClick={() => { setDraft(targets); setEditingTargets((v) => !v); }} style={{ color: COLORS.brass }} className="text-xs font-mono">{editingTargets ? "cancel" : "edit"}</button>
-        </div>
-        <div style={{ background: COLORS.card, borderColor: COLORS.line }} className="rounded-2xl border p-4 space-y-2.5">
-          {METRICS.map((m) => (
-            <div key={m.key} className="flex items-center justify-between gap-3">
-              <span style={{ color: COLORS.ink }} className="text-sm">{m.label}</span>
-              {editingTargets ? (
-                <input type="number" min={0} value={draft[m.key] || 0} onChange={(e) => setDraft({ ...draft, [m.key]: Math.max(0, parseInt(e.target.value) || 0) })}
-                  style={{ borderColor: COLORS.line, background: COLORS.parchment, color: COLORS.ink }} className="w-16 px-2 py-1 rounded-lg border text-center font-mono text-sm" />
-              ) : <span style={{ color: COLORS.brass }} className="font-mono text-sm font-semibold">{targets[m.key] || 0}</span>}
-            </div>
-          ))}
-          {editingTargets && <button onClick={() => { onSaveTargets(draft); setEditingTargets(false); }} style={{ background: COLORS.ink }} className="w-full py-2.5 rounded-xl text-white text-sm font-medium mt-2">Save targets</button>}
-        </div>
-      </div>
-      <div>
-        <SectionTitle label="Advisors" />
-        <div style={{ background: COLORS.card, borderColor: COLORS.line }} className="rounded-2xl border divide-y">
-          {roster.map((r) => {
-            const todayEntry = teamEntries.find((e) => e.advisor_code === r.code && e.entry_date === date);
-            const total = entryTotal(todayEntry);
-            const isOpen = selected === r.code;
-            const history = teamEntries.filter((e) => e.advisor_code === r.code).sort((a, b) => a.entry_date < b.entry_date ? 1 : -1).slice(0, 14);
-            return (
-              <div key={r.code}>
-                <button onClick={() => setSelected(isOpen ? null : r.code)} className="w-full px-4 py-3 flex items-center gap-3 text-left">
-                  <span style={{ color: total > 0 ? COLORS.good : COLORS.rust }}>●</span>
-                  <div className="flex-1">
-                    <div style={{ color: COLORS.ink }} className="font-medium text-sm">{r.name}</div>
-                    <div style={{ color: COLORS.slate }} className="font-mono text-[10px]">{total} logged today</div>
-                  </div>
-                  <span style={{ color: COLORS.slate }}>{isOpen ? "▾" : "▸"}</span>
-                </button>
-                {isOpen && (
-                  <div style={{ background: COLORS.parchment }} className="px-4 pb-3 space-y-2">
-                    {history.length === 0 ? <div style={{ color: COLORS.slate }} className="text-xs py-2">No history yet.</div> : history.map((e) => (
-                      <div key={e.id} style={{ borderColor: COLORS.line }} className="border rounded-xl p-2.5">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span style={{ color: COLORS.ink }} className="font-mono text-[11px] font-semibold">{shortDate(e.entry_date)}</span>
-                          <span style={{ color: COLORS.brass }} className="font-mono text-[11px]">{entryTotal(e)} total</span>
-                        </div>
-                        {e.note && <div style={{ color: COLORS.slate }} className="text-[11px] italic">"{e.note}"</div>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-      <button onClick={() => setShowExport(true)} style={{ borderColor: COLORS.line, color: COLORS.ink }} className="w-full py-3 rounded-2xl border font-medium text-sm">Export last 60 days as CSV</button>
-      {showExport && (
-        <div className="fixed inset-0 flex items-center justify-center px-5" style={{ background: "rgba(31,61,52,0.55)" }}>
-          <div style={{ background: COLORS.card }} className="w-full max-w-md rounded-3xl p-5 max-h-[80vh] flex flex-col">
-            <div className="flex items-center justify-between mb-3">
-              <div style={{ color: COLORS.ink }} className="font-display text-lg">Export CSV</div>
-              <button onClick={() => setShowExport(false)} style={{ color: COLORS.slate }}>✕</button>
-            </div>
-            <textarea readOnly value={csv || "No data yet."} onFocus={(e) => e.target.select()} style={{ borderColor: COLORS.line, background: COLORS.parchment, color: COLORS.ink }} className="flex-1 w-full px-3 py-2.5 rounded-xl border outline-none text-[11px] font-mono resize-none" rows={10} />
-            <button onClick={() => navigator.clipboard.writeText(csv).catch(() => {})} style={{ background: COLORS.ink }} className="w-full py-3 rounded-2xl text-white font-medium mt-3">Copy to clipboard</button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SectionTitle({ label, bare }) {
-  return <div className={bare ? "" : "mb-2.5"}><span style={{ color: COLORS.ink }} className="font-display text-base">{label}</span></div>;
-}
-
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
-</script>
-<script>
-  // Compile the app source explicitly with the classic JSX runtime.
-  // (Babel's automatic script-tag scanning defaults to a runtime that
-  // inserts an `import` statement, which fails outside a module — this
-  // avoids that entirely.)
-  var source = document.getElementById("app-source").textContent;
-  var output = Babel.transform(source, { presets: [["react", { runtime: "classic" }]] }).code;
-  var script = document.createElement("script");
-  script.textContent = output;
-  document.body.appendChild(script);
-</script>
-</body>
-</html>
+          <input value={newName} onChange={(e) =>

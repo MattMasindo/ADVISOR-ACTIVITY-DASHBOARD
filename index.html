@@ -9,7 +9,6 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   body { font-family: 'IBM Plex Sans', sans-serif; }
@@ -31,33 +30,38 @@
   window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNoeW1qb2hia3dvcGJjZHNzZm9vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4ODgzMTksImV4cCI6MjEwMjQ2NDMxOX0.wzQsGd-ohaFxz9vknvRUvWXVYnUKGZOLWSumOf2_Da8";
 </script>
 
-<script type="text/plain" id="app-source">
-const { useState, useEffect, useMemo } = React;
-const sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+<!-- Plain JavaScript below — no JSX, no in-browser compilation step. -->
+<script>
+(function () {
+"use strict";
+var h = React.createElement;
+var useState = React.useState, useEffect = React.useEffect, useMemo = React.useMemo;
+var sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 
-const COLORS = {
+var COLORS = {
   ink: "#1F3D34", inkLight: "#2E5548", parchment: "#EEF0E8", card: "#FBFBF7",
   brass: "#B8863B", brassLight: "#D9B26B", slate: "#52606D", rust: "#A3502B",
-  line: "#DDE1D2", good: "#3E7A4C",
+  line: "#DDE1D2", good: "#3E7A4C"
 };
 
-const METRICS = [
+var METRICS = [
   { key: "prospecting", label: "New Prospects", short: "Prospecting", color: COLORS.slate },
   { key: "approaching", label: "Initial Approaches", short: "Approaching", color: COLORS.brassLight },
   { key: "relationship", label: "Relationship Touches", short: "Relationship", color: COLORS.inkLight },
   { key: "appts", label: "Appointments Set", short: "Appointments", color: COLORS.brass },
   { key: "presented", label: "Clients Presented", short: "Presented", color: COLORS.ink },
-  { key: "closed", label: "Clients Closed", short: "Closed", color: COLORS.rust },
+  { key: "closed", label: "Clients Closed", short: "Closed", color: COLORS.rust }
 ];
 
-function todayStr(offset = 0) {
-  const d = new Date();
+function todayStr(offset) {
+  offset = offset || 0;
+  var d = new Date();
   d.setDate(d.getDate() + offset);
   return d.toISOString().slice(0, 10);
 }
 function startOfWeek(dateStr) {
-  const d = new Date(dateStr + "T00:00:00");
-  const day = d.getDay();
+  var d = new Date(dateStr + "T00:00:00");
+  var day = d.getDay();
   d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
   return d.toISOString().slice(0, 10);
 }
@@ -68,57 +72,57 @@ function shortDate(dateStr) {
   return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 function emptyEntry() {
-  const row = { social: false, note: "" };
-  METRICS.forEach((m) => (row[m.key] = 0));
+  var row = { social: false, note: "" };
+  METRICS.forEach(function (m) { row[m.key] = 0; });
   return row;
 }
 function entryTotal(e) {
   if (!e) return 0;
-  return METRICS.reduce((s, m) => s + (e[m.key] || 0), 0);
+  return METRICS.reduce(function (s, m) { return s + (e[m.key] || 0); }, 0);
 }
-function lget(key) { try { return JSON.parse(localStorage.getItem(key)); } catch (e) { return null; } }
-function lset(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {} }
+function lget(key) { try { return JSON.parse(localStorage.getItem(key)); } catch (err) { return null; } }
+function lset(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (err) {} }
 
 function App() {
-  const [loading, setLoading] = useState(true);
-  const [dbError, setDbError] = useState(null);
-  const [myIdentity, setMyIdentity] = useState(lget("my-identity"));
-  const [roster, setRoster] = useState([]);
-  const [targets, setTargets] = useState({});
-  const [hasManagerPin, setHasManagerPin] = useState(false);
-  const [isManager, setIsManager] = useState(!!lget("is-manager"));
-  const [myEntries, setMyEntries] = useState({});
-  const [teamEntries, setTeamEntries] = useState([]);
-  const [teamLoading, setTeamLoading] = useState(false);
-  const [view, setView] = useState("log");
-  const [switching, setSwitching] = useState(false);
-  const [pulse, setPulse] = useState(null);
-  const [showManagerGate, setShowManagerGate] = useState(false);
-  const [saveError, setSaveError] = useState(false);
+  var loadingState = useState(true); var loading = loadingState[0], setLoading = loadingState[1];
+  var dbErrorState = useState(null); var dbError = dbErrorState[0], setDbError = dbErrorState[1];
+  var myIdentityState = useState(lget("my-identity")); var myIdentity = myIdentityState[0], setMyIdentity = myIdentityState[1];
+  var rosterState = useState([]); var roster = rosterState[0], setRoster = rosterState[1];
+  var targetsState = useState({}); var targets = targetsState[0], setTargets = targetsState[1];
+  var hasPinState = useState(false); var hasManagerPin = hasPinState[0], setHasManagerPin = hasPinState[1];
+  var isManagerState = useState(!!lget("is-manager")); var isManager = isManagerState[0], setIsManager = isManagerState[1];
+  var myEntriesState = useState({}); var myEntries = myEntriesState[0], setMyEntries = myEntriesState[1];
+  var teamEntriesState = useState([]); var teamEntries = teamEntriesState[0], setTeamEntries = teamEntriesState[1];
+  var teamLoadingState = useState(false); var teamLoading = teamLoadingState[0], setTeamLoading = teamLoadingState[1];
+  var viewState = useState("log"); var view = viewState[0], setView = viewState[1];
+  var switchingState = useState(false); var switching = switchingState[0], setSwitching = switchingState[1];
+  var pulseState = useState(null); var pulse = pulseState[0], setPulse = pulseState[1];
+  var showGateState = useState(false); var showManagerGate = showGateState[0], setShowManagerGate = showGateState[1];
+  var saveErrorState = useState(false); var saveError = saveErrorState[0], setSaveError = saveErrorState[1];
 
-  useEffect(() => {
-    (async () => {
-      const [{ data: rosterData, error: e1 }, { data: targetData, error: e2 }, { data: hasPinData, error: e3 }] =
-        await Promise.all([
-          sb.from("advisors").select("*").order("name"),
-          sb.from("targets").select("*"),
-          sb.rpc("has_manager_pin"),
-        ]);
-      if (e1 || e2 || e3) {
+  useEffect(function () {
+    (async function () {
+      var results = await Promise.all([
+        sb.from("advisors").select("*").order("name"),
+        sb.from("targets").select("*"),
+        sb.rpc("has_manager_pin")
+      ]);
+      var rosterRes = results[0], targetRes = results[1], pinRes = results[2];
+      if (rosterRes.error || targetRes.error || pinRes.error) {
         setDbError("Couldn't reach the database. Check that your Supabase URL and key are filled in at the top of index.html, and that schema.sql has been run.");
         setLoading(false);
         return;
       }
-      setRoster(rosterData || []);
-      const tMap = {};
-      (targetData || []).forEach((t) => (tMap[t.stage] = t.daily_target));
+      setRoster(rosterRes.data || []);
+      var tMap = {};
+      (targetRes.data || []).forEach(function (t) { tMap[t.stage] = t.daily_target; });
       setTargets(tMap);
-      setHasManagerPin(!!hasPinData);
+      setHasManagerPin(!!pinRes.data);
 
       if (myIdentity) {
-        const { data } = await sb.from("entries").select("*").eq("advisor_code", myIdentity.code);
-        const map = {};
-        (data || []).forEach((row) => (map[row.entry_date] = row));
+        var er = await sb.from("entries").select("*").eq("advisor_code", myIdentity.code);
+        var map = {};
+        (er.data || []).forEach(function (row) { map[row.entry_date] = row; });
         setMyEntries(map);
       }
       setLoading(false);
@@ -126,78 +130,81 @@ function App() {
     // eslint-disable-next-line
   }, []);
 
-  const loadTeamData = async () => {
+  var loadTeamData = async function () {
     setTeamLoading(true);
-    const { data } = await sb.from("entries").select("*");
-    setTeamEntries(data || []);
+    var res = await sb.from("entries").select("*");
+    setTeamEntries(res.data || []);
     setTeamLoading(false);
   };
 
-  useEffect(() => {
+  useEffect(function () {
     if (view === "team" || view === "manager") loadTeamData();
     // eslint-disable-next-line
   }, [view]);
 
-  const chooseAdvisor = async (identity) => {
+  var chooseAdvisor = async function (identity) {
     setMyIdentity(identity);
     lset("my-identity", identity);
     setSwitching(false);
-    const { data } = await sb.from("entries").select("*").eq("advisor_code", identity.code);
-    const map = {};
-    (data || []).forEach((row) => (map[row.entry_date] = row));
+    var res = await sb.from("entries").select("*").eq("advisor_code", identity.code);
+    var map = {};
+    (res.data || []).forEach(function (row) { map[row.entry_date] = row; });
     setMyEntries(map);
   };
 
-  const createAdvisor = async ({ name, code }) => {
-    const { error } = await sb.from("advisors").insert({ name, code });
-    if (error) return { ok: false, message: error.code === "23505" ? "That code is already taken — pick another." : "Couldn't save. Try again." };
-    setRoster([...roster, { name, code }]);
-    await chooseAdvisor({ name, code });
+  var createAdvisor = async function (info) {
+    var res = await sb.from("advisors").insert({ name: info.name, code: info.code });
+    if (res.error) return { ok: false, message: res.error.code === "23505" ? "That code is already taken — pick another." : "Couldn't save. Try again." };
+    setRoster(roster.concat([{ name: info.name, code: info.code }]));
+    await chooseAdvisor({ name: info.name, code: info.code });
     return { ok: true };
   };
 
-  const today = todayStr();
-  const myCode = myIdentity?.code;
-  const myTodayEntry = myEntries[today] || emptyEntry();
+  var today = todayStr();
+  var myCode = myIdentity ? myIdentity.code : undefined;
+  var myTodayEntry = myEntries[today] || emptyEntry();
 
-  const bump = async (key, delta) => {
-    const optimistic = { ...myTodayEntry, [key]: Math.max(0, (myTodayEntry[key] || 0) + delta) };
-    setMyEntries({ ...myEntries, [today]: optimistic });
+  var bump = async function (key, delta) {
+    var optimistic = Object.assign({}, myTodayEntry);
+    optimistic[key] = Math.max(0, (myTodayEntry[key] || 0) + delta);
+    var newEntries = Object.assign({}, myEntries); newEntries[today] = optimistic;
+    setMyEntries(newEntries);
     setPulse(key);
-    setTimeout(() => setPulse(null), 500);
-    const { error } = await sb.rpc("bump_metric", { p_code: myCode, p_date: today, p_field: key, p_delta: delta });
-    setSaveError(!!error);
-    if (!error) {
-      const { data } = await sb.from("entries").select("*").eq("advisor_code", myCode).eq("entry_date", today).single();
-      if (data) setMyEntries((prev) => ({ ...prev, [today]: data }));
+    setTimeout(function () { setPulse(null); }, 500);
+    var res = await sb.rpc("bump_metric", { p_code: myCode, p_date: today, p_field: key, p_delta: delta });
+    setSaveError(!!res.error);
+    if (!res.error) {
+      var row = await sb.from("entries").select("*").eq("advisor_code", myCode).eq("entry_date", today).single();
+      if (row.data) setMyEntries(function (prev) { var next = Object.assign({}, prev); next[today] = row.data; return next; });
     }
   };
 
-  const upsertField = async (fields) => {
-    const updated = { ...myTodayEntry, ...fields, advisor_code: myCode, entry_date: today };
-    setMyEntries({ ...myEntries, [today]: updated });
-    const { error } = await sb.from("entries").upsert(updated, { onConflict: "advisor_code,entry_date" });
-    setSaveError(!!error);
+  var upsertField = async function (fields) {
+    var updated = Object.assign({}, myTodayEntry, fields, { advisor_code: myCode, entry_date: today });
+    var newEntries = Object.assign({}, myEntries); newEntries[today] = updated;
+    setMyEntries(newEntries);
+    var res = await sb.from("entries").upsert(updated, { onConflict: "advisor_code,entry_date" });
+    setSaveError(!!res.error);
   };
 
-  const saveTargets = async (draft) => {
+  var saveTargets = async function (draft) {
     setTargets(draft);
-    await Promise.all(Object.entries(draft).map(([stage, daily_target]) =>
-      sb.from("targets").upsert({ stage, daily_target }, { onConflict: "stage" })
-    ));
+    await Promise.all(Object.keys(draft).map(function (stage) {
+      return sb.from("targets").upsert({ stage: stage, daily_target: draft[stage] }, { onConflict: "stage" });
+    }));
   };
 
-  const unlockManager = async (pin) => {
+  var unlockManager = async function (pin) {
     if (!hasManagerPin) {
-      const { data: setOk } = await sb.rpc("set_manager_pin_if_unset", { p_pin: pin });
-      if (!setOk) return false; // someone else set it a moment before you — ask them to re-enter as a login instead
+      var setRes = await sb.rpc("set_manager_pin_if_unset", { p_pin: pin });
+      if (!setRes.data) return false;
       setHasManagerPin(true);
       setIsManager(true); lset("is-manager", true);
       setShowManagerGate(false); setView("manager");
       return true;
     }
-    const { data: matches } = await sb.rpc("check_manager_pin", { p_candidate: pin });
-    if (matches) {
+    var checkRes = await sb.rpc("check_manager_pin", { p_candidate: pin });
+    if (checkRes.data) {
       setIsManager(true); lset("is-manager", true);
       setShowManagerGate(false); setView("manager");
       return true;
@@ -205,136 +212,453 @@ function App() {
     return false;
   };
 
-  const todayRows = teamEntries.filter((e) => e.entry_date === today);
-  const todayTotals = METRICS.reduce((acc, m) => { acc[m.key] = todayRows.reduce((s, e) => s + (e[m.key] || 0), 0); return acc; }, {});
-  const socialToday = todayRows.filter((e) => e.social).length;
+  var todayRows = teamEntries.filter(function (e) { return e.entry_date === today; });
+  var todayTotals = {};
+  METRICS.forEach(function (m) {
+    todayTotals[m.key] = todayRows.reduce(function (s, e) { return s + (e[m.key] || 0); }, 0);
+  });
+  var socialToday = todayRows.filter(function (e) { return e.social; }).length;
 
-  const weekStart = startOfWeek(today);
-  const weekRows = teamEntries.filter((e) => e.entry_date >= weekStart && e.entry_date <= today);
-  const board = {};
-  weekRows.forEach((e) => {
+  var weekStart = startOfWeek(today);
+  var weekRows = teamEntries.filter(function (e) { return e.entry_date >= weekStart && e.entry_date <= today; });
+  var board = {};
+  weekRows.forEach(function (e) {
     if (!board[e.advisor_code]) {
-      const advisor = roster.find((r) => r.code === e.advisor_code);
+      var advisor = roster.filter(function (r) { return r.code === e.advisor_code; })[0];
       board[e.advisor_code] = { code: e.advisor_code, name: advisor ? advisor.name : e.advisor_code, social: 0 };
     }
-    METRICS.forEach((m) => (board[e.advisor_code][m.key] = (board[e.advisor_code][m.key] || 0) + (e[m.key] || 0)));
+    METRICS.forEach(function (m) { board[e.advisor_code][m.key] = (board[e.advisor_code][m.key] || 0) + (e[m.key] || 0); });
     if (e.social) board[e.advisor_code].social += 1;
   });
-  const leaderboard = Object.values(board).sort((a, b) => (b.closed || 0) - (a.closed || 0) || (b.appts || 0) - (a.appts || 0));
+  var leaderboard = Object.keys(board).map(function (k) { return board[k]; }).sort(function (a, b) {
+    return (b.closed || 0) - (a.closed || 0) || (b.appts || 0) - (a.appts || 0);
+  });
 
-  const last7 = Array.from({ length: 7 }, (_, i) => todayStr(-6 + i));
-  const trendData = last7.map((d) => {
-    const rows = teamEntries.filter((e) => e.entry_date === d);
-    const point = { date: d, label: new Date(d + "T00:00:00").toLocaleDateString("en-US", { weekday: "short" }) };
-    METRICS.forEach((m) => (point[m.key] = rows.reduce((s, e) => s + (e[m.key] || 0), 0)));
+  var last7 = [0, 1, 2, 3, 4, 5, 6].map(function (i) { return todayStr(-6 + i); });
+  var trendData = last7.map(function (d) {
+    var rows = teamEntries.filter(function (e) { return e.entry_date === d; });
+    var point = { date: d, label: new Date(d + "T00:00:00").toLocaleDateString("en-US", { weekday: "short" }) };
+    METRICS.forEach(function (m) { point[m.key] = rows.reduce(function (s, e) { return s + (e[m.key] || 0); }, 0); });
     return point;
   });
 
-  const funnelData = METRICS.map((m) => ({ ...m, value: todayTotals[m.key] || 0 }));
-  const missingToday = roster.filter((r) => entryTotal(todayRows.find((e) => e.advisor_code === r.code)) === 0);
-  const loggedTodayCount = roster.length - missingToday.length;
+  var funnelData = METRICS.map(function (m) { return Object.assign({}, m, { value: todayTotals[m.key] || 0 }); });
+  var missingToday = roster.filter(function (r) {
+    return entryTotal(todayRows.filter(function (e) { return e.advisor_code === r.code; })[0]) === 0;
+  });
+  var loggedTodayCount = roster.length - missingToday.length;
 
   if (dbError) {
-    return (
-      <div style={{ background: COLORS.parchment, minHeight: "100vh" }} className="flex items-center justify-center px-6">
-        <div style={{ background: COLORS.card, borderColor: COLORS.line, color: COLORS.rust }} className="max-w-sm rounded-2xl border p-5 text-sm">{dbError}</div>
-      </div>
+    return h("div", { style: { background: COLORS.parchment, minHeight: "100vh" }, className: "flex items-center justify-center px-6" },
+      h("div", { style: { background: COLORS.card, borderColor: COLORS.line, color: COLORS.rust }, className: "max-w-sm rounded-2xl border p-5 text-sm" }, dbError)
     );
   }
   if (loading) {
-    return (
-      <div style={{ background: COLORS.parchment, minHeight: "100vh" }} className="flex items-center justify-center">
-        <div style={{ color: COLORS.ink }} className="text-sm tracking-widest uppercase font-mono">Loading ledger…</div>
-      </div>
+    return h("div", { style: { background: COLORS.parchment, minHeight: "100vh" }, className: "flex items-center justify-center" },
+      h("div", { style: { color: COLORS.ink }, className: "text-sm tracking-widest uppercase font-mono" }, "Loading ledger…")
     );
   }
 
-  return (
-    <div style={{ background: COLORS.parchment, minHeight: "100vh" }}>
-      {(!myIdentity || switching) ? (
-        <Onboarding roster={roster} onChoose={chooseAdvisor} onCreate={createAdvisor} cancelable={!!myIdentity} onCancel={() => setSwitching(false)} />
-      ) : (
-        <div className="max-w-md mx-auto pb-10">
-          <div style={{ background: COLORS.ink }} className="px-5 pt-6 pb-5 rounded-b-3xl">
-            <div className="flex items-center justify-between">
-              <div>
-                <div style={{ color: COLORS.brassLight }} className="text-[11px] tracking-[0.2em] uppercase font-mono">Field Log</div>
-                <div className="font-display text-white text-2xl mt-0.5">{myIdentity.name}</div>
-              </div>
-              <button onClick={() => setSwitching(true)} className="text-white/70 hover:text-white text-xs font-mono">switch</button>
-            </div>
-            <div className="flex mt-5 rounded-xl overflow-hidden border border-white/15">
-              {["log", "team", "manager"].map((v) => (
-                <button key={v} onClick={() => (v === "manager" ? (isManager ? setView("manager") : setShowManagerGate(true)) : setView(v))}
-                  className="flex-1 py-2.5 text-sm font-medium"
-                  style={{ background: view === v ? COLORS.brass : "transparent", color: view === v ? COLORS.ink : "rgba(255,255,255,0.75)" }}>
-                  {v === "log" ? "Log Activity" : v === "team" ? "Team Board" : "Manager"}
-                </button>
-              ))}
-            </div>
-          </div>
+  var tabsRow = h("div", { className: "flex mt-5 rounded-xl overflow-hidden border border-white/15" },
+    ["log", "team", "manager"].map(function (v) {
+      return h("button", {
+        key: v,
+        onClick: function () { v === "manager" ? (isManager ? setView("manager") : setShowManagerGate(true)) : setView(v); },
+        className: "flex-1 py-2.5 text-sm font-medium",
+        style: { background: view === v ? COLORS.brass : "transparent", color: view === v ? COLORS.ink : "rgba(255,255,255,0.75)" }
+      }, v === "log" ? "Log Activity" : v === "team" ? "Team Board" : "Manager");
+    })
+  );
 
-          {view === "log" && (
-            <LogView date={today} entry={myTodayEntry} pulse={pulse} targets={targets} saveError={saveError}
-              onBump={bump} onToggleSocial={() => upsertField({ social: !myTodayEntry.social })} onNote={(note) => upsertField({ note })} />
-          )}
-          {view === "team" && (
-            <TeamView date={today} todayTotals={todayTotals} socialToday={socialToday} teamCount={new Set(todayRows.map((e) => e.advisor_code)).size}
-              leaderboard={leaderboard} trendData={trendData} funnelData={funnelData} myCode={myCode} loading={teamLoading} onRefresh={loadTeamData} />
-          )}
-          {view === "manager" && isManager && (
-            <ManagerView date={today} roster={roster} teamEntries={teamEntries} loading={teamLoading} onRefresh={loadTeamData}
-              missingToday={missingToday} loggedTodayCount={loggedTodayCount} targets={targets} onSaveTargets={saveTargets} />
-          )}
-        </div>
-      )}
-      {showManagerGate && <ManagerGate hasPin={hasManagerPin} onSubmit={unlockManager} onClose={() => setShowManagerGate(false)} />}
-    </div>
+  var header = h("div", { style: { background: COLORS.ink }, className: "px-5 pt-6 pb-5 rounded-b-3xl" },
+    h("div", { className: "flex items-center justify-between" },
+      h("div", null,
+        h("div", { style: { color: COLORS.brassLight }, className: "text-[11px] tracking-[0.2em] uppercase font-mono" }, "Field Log"),
+        h("div", { className: "font-display text-white text-2xl mt-0.5" }, myIdentity.name)
+      ),
+      h("button", { onClick: function () { setSwitching(true); }, className: "text-white/70 hover:text-white text-xs font-mono" }, "switch")
+    ),
+    tabsRow
+  );
+
+  var mainBody = h("div", { className: "max-w-md mx-auto pb-10" },
+    header,
+    view === "log" && h(LogView, {
+      date: today, entry: myTodayEntry, pulse: pulse, targets: targets, saveError: saveError,
+      onBump: bump, onToggleSocial: function () { upsertField({ social: !myTodayEntry.social }); }, onNote: function (note) { upsertField({ note: note }); }
+    }),
+    view === "team" && h(TeamView, {
+      date: today, todayTotals: todayTotals, socialToday: socialToday,
+      teamCount: new Set(todayRows.map(function (e) { return e.advisor_code; })).size,
+      leaderboard: leaderboard, trendData: trendData, funnelData: funnelData, myCode: myCode, loading: teamLoading, onRefresh: loadTeamData
+    }),
+    view === "manager" && isManager && h(ManagerView, {
+      date: today, roster: roster, teamEntries: teamEntries, loading: teamLoading, onRefresh: loadTeamData,
+      missingToday: missingToday, loggedTodayCount: loggedTodayCount, targets: targets, onSaveTargets: saveTargets
+    })
+  );
+
+  return h("div", { style: { background: COLORS.parchment, minHeight: "100vh" } },
+    (!myIdentity || switching)
+      ? h(Onboarding, { roster: roster, onChoose: chooseAdvisor, onCreate: createAdvisor, cancelable: !!myIdentity, onCancel: function () { setSwitching(false); } })
+      : mainBody,
+    showManagerGate && h(ManagerGate, { hasPin: hasManagerPin, onSubmit: unlockManager, onClose: function () { setShowManagerGate(false); } })
   );
 }
 
-function Onboarding({ roster, onChoose, onCreate, cancelable, onCancel }) {
-  const [mode, setMode] = useState("pick");
-  const [target, setTarget] = useState(null);
-  const [pin, setPin] = useState("");
-  const [error, setError] = useState("");
-  const [newName, setNewName] = useState("");
-  const [newCode, setNewCode] = useState("");
+function Onboarding(props) {
+  var roster = props.roster, onChoose = props.onChoose, onCreate = props.onCreate, cancelable = props.cancelable, onCancel = props.onCancel;
+  var modeState = useState("pick"); var mode = modeState[0], setMode = modeState[1];
+  var targetState = useState(null); var target = targetState[0], setTarget = targetState[1];
+  var pinState = useState(""); var pin = pinState[0], setPin = pinState[1];
+  var errorState = useState(""); var error = errorState[0], setError = errorState[1];
+  var newNameState = useState(""); var newName = newNameState[0], setNewName = newNameState[1];
+  var newCodeState = useState(""); var newCode = newCodeState[0], setNewCode = newCodeState[1];
 
-  const submitPin = () => {
+  var submitPin = function () {
     if (pin.trim().toLowerCase() === target.code.trim().toLowerCase()) onChoose({ name: target.name, code: target.code });
     else { setError("That code doesn't match. Try again."); setPin(""); }
   };
-  const submitNew = async () => {
-    const name = newName.trim(), code = newCode.trim();
+  var submitNew = async function () {
+    var name = newName.trim(), code = newCode.trim();
     if (!name || !code) { setError("Enter your name and a code."); return; }
     if (code.length < 4) { setError("Your code needs to be at least 4 characters."); return; }
-    const res = await onCreate({ name, code });
+    var res = await onCreate({ name: name, code: code });
     if (!res.ok) setError(res.message);
   };
 
   if (mode === "pin" && target) {
-    return (
-      <div className="max-w-md mx-auto min-h-screen flex flex-col justify-center px-6 py-10">
-        <div className="text-center mb-8">
-          <div style={{ color: COLORS.ink }} className="font-display text-2xl">{target.name}</div>
-          <div style={{ color: COLORS.slate }} className="text-sm mt-1">Enter your advisor code to continue</div>
-        </div>
-        <input value={pin} onChange={(e) => setPin(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submitPin()} autoFocus
-          style={{ borderColor: COLORS.line, background: COLORS.card, color: COLORS.ink }}
-          className="w-full px-4 py-3 rounded-2xl border outline-none focus:ring-2 text-center text-xl font-mono" placeholder="Your code" />
-        {error && <div style={{ color: COLORS.rust }} className="text-xs text-center mt-2">{error}</div>}
-        <button onClick={submitPin} style={{ background: COLORS.ink }} className="w-full py-3 rounded-2xl text-white font-medium mt-4">Unlock</button>
-        <button onClick={() => setMode("pick")} style={{ color: COLORS.slate }} className="mt-4 text-sm text-center underline">Back</button>
-      </div>
+    return h("div", { className: "max-w-md mx-auto min-h-screen flex flex-col justify-center px-6 py-10" },
+      h("div", { className: "text-center mb-8" },
+        h("div", { style: { color: COLORS.ink }, className: "font-display text-2xl" }, target.name),
+        h("div", { style: { color: COLORS.slate }, className: "text-sm mt-1" }, "Enter your advisor code to continue")
+      ),
+      h("input", {
+        value: pin, onChange: function (ev) { setPin(ev.target.value); },
+        onKeyDown: function (ev) { if (ev.key === "Enter") submitPin(); }, autoFocus: true,
+        style: { borderColor: COLORS.line, background: COLORS.card, color: COLORS.ink },
+        className: "w-full px-4 py-3 rounded-2xl border outline-none focus:ring-2 text-center text-xl font-mono", placeholder: "Your code"
+      }),
+      error && h("div", { style: { color: COLORS.rust }, className: "text-xs text-center mt-2" }, error),
+      h("button", { onClick: submitPin, style: { background: COLORS.ink }, className: "w-full py-3 rounded-2xl text-white font-medium mt-4" }, "Unlock"),
+      h("button", { onClick: function () { setMode("pick"); }, style: { color: COLORS.slate }, className: "mt-4 text-sm text-center underline" }, "Back")
     );
   }
   if (mode === "new") {
-    return (
-      <div className="max-w-md mx-auto min-h-screen flex flex-col justify-center px-6 py-10">
-        <div className="text-center mb-8">
-          <div style={{ color: COLORS.brass }} className="text-[11px] tracking-[0.25em] uppercase font-mono mb-2">New Advisor</div>
-          <div style={{ color: COLORS.ink }} className="font-display text-3xl">Set up your log</div>
-        </div>
-        <div className="space-y-2">
-          <input value={newName} onChange={(e) =>
+    return h("div", { className: "max-w-md mx-auto min-h-screen flex flex-col justify-center px-6 py-10" },
+      h("div", { className: "text-center mb-8" },
+        h("div", { style: { color: COLORS.brass }, className: "text-[11px] tracking-[0.25em] uppercase font-mono mb-2" }, "New Advisor"),
+        h("div", { style: { color: COLORS.ink }, className: "font-display text-3xl" }, "Set up your log")
+      ),
+      h("div", { className: "space-y-2" },
+        h("input", { value: newName, onChange: function (ev) { setNewName(ev.target.value); }, placeholder: "Full name",
+          style: { borderColor: COLORS.line, background: COLORS.card, color: COLORS.ink }, className: "w-full px-4 py-3 rounded-2xl border outline-none focus:ring-2" }),
+        h("input", { value: newCode, onChange: function (ev) { setNewCode(ev.target.value); }, onKeyDown: function (ev) { if (ev.key === "Enter") submitNew(); }, placeholder: "Advisor code",
+          style: { borderColor: COLORS.line, background: COLORS.card, color: COLORS.ink }, className: "w-full px-4 py-3 rounded-2xl border outline-none focus:ring-2 font-mono" }),
+        error && h("div", { style: { color: COLORS.rust }, className: "text-xs" }, error),
+        h("div", { style: { color: COLORS.slate }, className: "text-[11px] leading-relaxed pt-1" }, "Your code is also your login from now on — keep it to yourself."),
+        h("button", { onClick: submitNew, style: { background: COLORS.ink }, className: "w-full py-3 rounded-2xl text-white font-medium mt-2" }, "Create my log")
+      ),
+      h("button", { onClick: function () { setError(""); setMode("pick"); }, style: { color: COLORS.slate }, className: "mt-6 text-sm text-center underline" }, "Back")
+    );
+  }
+  return h("div", { className: "max-w-md mx-auto min-h-screen flex flex-col justify-center px-6 py-10" },
+    h("div", { className: "text-center mb-8" },
+      h("div", { style: { color: COLORS.brass }, className: "text-[11px] tracking-[0.25em] uppercase font-mono mb-2" }, "Advisor Activity Ledger"),
+      h("div", { style: { color: COLORS.ink }, className: "font-display text-3xl" }, "Who's logging in?")
+    ),
+    roster.length > 0 && h("div", { className: "space-y-2 mb-6" },
+      roster.map(function (r) {
+        return h("button", {
+          key: r.code,
+          onClick: function () { setTarget(r); setPin(""); setError(""); setMode("pin"); },
+          style: { background: COLORS.card, borderColor: COLORS.line },
+          className: "w-full text-left px-4 py-3.5 rounded-2xl border flex items-center justify-between"
+        }, h("div", { style: { color: COLORS.ink }, className: "font-medium" }, r.name));
+      })
+    ),
+    h("button", { onClick: function () { setError(""); setMode("new"); }, style: { borderColor: COLORS.line, color: COLORS.ink }, className: "w-full py-3.5 rounded-2xl border border-dashed font-medium text-sm" }, "+ I'm new here"),
+    cancelable && h("button", { onClick: onCancel, style: { color: COLORS.slate }, className: "mt-6 text-sm text-center underline" }, "Cancel")
+  );
+}
+
+function ManagerGate(props) {
+  var hasPin = props.hasPin, onSubmit = props.onSubmit, onClose = props.onClose;
+  var pinState = useState(""); var pin = pinState[0], setPin = pinState[1];
+  var confirmState = useState(""); var confirm = confirmState[0], setConfirm = confirmState[1];
+  var errorState = useState(""); var error = errorState[0], setError = errorState[1];
+  var submit = async function () {
+    if (!hasPin) {
+      if (!/^\d{4}$/.test(pin)) { setError("Choose a 4-digit PIN."); return; }
+      if (pin !== confirm) { setError("PINs don't match."); return; }
+      await onSubmit(pin);
+    } else {
+      var ok = await onSubmit(pin);
+      if (!ok) { setError("Incorrect PIN."); setPin(""); }
+    }
+  };
+  return h("div", { className: "fixed inset-0 flex items-center justify-center px-6", style: { background: "rgba(31,61,52,0.55)" } },
+    h("div", { style: { background: COLORS.card }, className: "w-full max-w-sm rounded-3xl p-6 relative" },
+      h("button", { onClick: onClose, className: "absolute top-4 right-4", style: { color: COLORS.slate } }, "✕"),
+      h("div", { style: { color: COLORS.ink }, className: "font-display text-xl mb-1" }, hasPin ? "Manager access" : "Set up manager access"),
+      h("div", { style: { color: COLORS.slate }, className: "text-sm mb-4" }, hasPin ? "Enter the manager PIN." : "Set this once — anyone with it can see every advisor's history."),
+      h("input", {
+        value: pin, onChange: function (ev) { setPin(ev.target.value.replace(/\D/g, "").slice(0, 4)); }, inputMode: "numeric", autoFocus: true, placeholder: "••••",
+        style: { borderColor: COLORS.line, background: COLORS.parchment, color: COLORS.ink, letterSpacing: "0.5em" },
+        className: "w-full px-4 py-3 rounded-2xl border outline-none focus:ring-2 text-center text-xl font-mono mb-2"
+      }),
+      !hasPin && h("input", {
+        value: confirm, onChange: function (ev) { setConfirm(ev.target.value.replace(/\D/g, "").slice(0, 4)); }, onKeyDown: function (ev) { if (ev.key === "Enter") submit(); }, inputMode: "numeric", placeholder: "Confirm PIN",
+        style: { borderColor: COLORS.line, background: COLORS.parchment, color: COLORS.ink, letterSpacing: "0.5em" },
+        className: "w-full px-4 py-3 rounded-2xl border outline-none focus:ring-2 text-center text-xl font-mono mb-2"
+      }),
+      error && h("div", { style: { color: COLORS.rust }, className: "text-xs mb-2" }, error),
+      h("button", { onClick: submit, style: { background: COLORS.ink }, className: "w-full py-3 rounded-2xl text-white font-medium mt-2" }, hasPin ? "Unlock" : "Set PIN & continue")
+    )
+  );
+}
+
+function LogView(props) {
+  var date = props.date, entry = props.entry, pulse = props.pulse, targets = props.targets, onBump = props.onBump, onToggleSocial = props.onToggleSocial, onNote = props.onNote, saveError = props.saveError;
+  var totalToday = entryTotal(entry);
+  var showNudge = new Date().getHours() >= 15 && totalToday === 0;
+  return h("div", { className: "px-5 mt-6" },
+    h("div", { style: { color: COLORS.slate }, className: "text-xs font-mono uppercase tracking-wide mb-4" }, prettyDate(date)),
+    showNudge && h("div", { style: { background: "#FBEFE7", borderColor: COLORS.rust, color: COLORS.rust }, className: "rounded-2xl border p-3.5 text-xs mb-4" }, "Nothing logged today yet."),
+    saveError && h("div", { style: { background: "#FBEFE7", borderColor: COLORS.rust, color: COLORS.rust }, className: "rounded-2xl border p-3 text-xs mb-4" }, "Your last tap may not have saved — check your connection."),
+    h("div", { className: "space-y-3" },
+      METRICS.map(function (m) {
+        var val = entry[m.key] || 0, target = targets[m.key] || 0, met = target > 0 && val >= target;
+        return h("div", { key: m.key, style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4 flex items-center justify-between" },
+          h("div", null,
+            h("div", { style: { color: COLORS.ink }, className: "font-medium text-sm" }, m.label),
+            target > 0 && h("div", { style: { color: met ? COLORS.good : COLORS.slate }, className: "text-[10px] font-mono mt-0.5" }, "target " + target + (met ? " ✓" : ""))
+          ),
+          h("div", { className: "flex items-center gap-3" },
+            h("button", { onClick: function () { onBump(m.key, -1); }, style: { borderColor: COLORS.line, color: COLORS.slate }, className: "w-9 h-9 rounded-full border flex items-center justify-center active:scale-95" }, "–"),
+            h("div", { style: { color: COLORS.ink }, className: "font-mono text-xl w-7 text-center " + (pulse === m.key ? "pop" : "") }, val),
+            h("button", { onClick: function () { onBump(m.key, 1); }, style: { background: COLORS.brass }, className: "w-9 h-9 rounded-full text-white flex items-center justify-center active:scale-95" }, "+")
+          )
+        );
+      }),
+      h("button", { onClick: onToggleSocial, style: { background: entry.social ? COLORS.ink : COLORS.card, borderColor: entry.social ? COLORS.ink : COLORS.line }, className: "w-full rounded-2xl border p-4 flex items-center justify-between" },
+        h("div", { style: { color: entry.social ? "white" : COLORS.ink }, className: "font-medium text-sm" }, "Posted on social media today"),
+        h("div", { style: { borderColor: entry.social ? COLORS.brass : COLORS.line, background: entry.social ? COLORS.brass : "transparent" }, className: "w-6 h-6 rounded-md border-2" })
+      ),
+      h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4" },
+        h("div", { style: { color: COLORS.slate }, className: "text-xs font-mono uppercase tracking-wide mb-2" }, "Notes (optional)"),
+        h("textarea", {
+          defaultValue: entry.note || "", onBlur: function (ev) { onNote(ev.target.value); }, placeholder: "Who did you talk to?",
+          style: { borderColor: COLORS.line, background: COLORS.parchment, color: COLORS.ink }, className: "w-full px-3 py-2.5 rounded-xl border outline-none focus:ring-2 text-sm resize-none", rows: 2
+        })
+      )
+    ),
+    h("div", { style: { color: COLORS.slate }, className: "text-center text-xs mt-5 font-mono" }, "Every tap saves instantly.")
+  );
+}
+
+function TrendChart(props) {
+  var data = props.data;
+  var w = 320, ht = 160, pad = 24;
+  var max = Math.max.apply(null, [1].concat(data.reduce(function (acc, d) { return acc.concat(METRICS.map(function (m) { return d[m.key] || 0; })); }, [])));
+  var x = function (i) { return pad + (i * (w - pad * 2)) / (data.length - 1); };
+  var y = function (v) { return ht - pad - (v / max) * (ht - pad * 2); };
+  return h("svg", { viewBox: "0 0 " + w + " " + ht, className: "w-full" },
+    METRICS.map(function (m) {
+      return h("polyline", {
+        key: m.key, fill: "none", stroke: m.color, strokeWidth: "2",
+        points: data.map(function (d, i) { return x(i) + "," + y(d[m.key] || 0); }).join(" ")
+      });
+    }),
+    data.map(function (d, i) {
+      return h("text", { key: d.date, x: x(i), y: ht - 4, fontSize: "9", fill: COLORS.slate, textAnchor: "middle", fontFamily: "IBM Plex Mono" }, d.label);
+    })
+  );
+}
+
+function TeamView(props) {
+  var date = props.date, todayTotals = props.todayTotals, socialToday = props.socialToday, teamCount = props.teamCount,
+    leaderboard = props.leaderboard, trendData = props.trendData, funnelData = props.funnelData, myCode = props.myCode, loading = props.loading, onRefresh = props.onRefresh;
+  var maxFunnel = Math.max.apply(null, [1].concat(funnelData.map(function (f) { return f.value; })));
+  return h("div", { className: "px-5 mt-6 space-y-6" },
+    h("div", { className: "flex items-center justify-between" },
+      h("div", { style: { color: COLORS.slate }, className: "text-xs font-mono uppercase tracking-wide" }, prettyDate(date) + " · " + teamCount + " logged in"),
+      h("button", { onClick: onRefresh, style: { color: COLORS.brass }, className: "text-xs font-mono" }, loading ? "…" : "refresh")
+    ),
+    h("div", { className: "grid grid-cols-2 gap-3" },
+      METRICS.map(function (m) {
+        return h("div", { key: m.key, style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4" },
+          h("div", { style: { color: COLORS.ink }, className: "font-mono text-2xl" }, todayTotals[m.key] || 0),
+          h("div", { style: { color: COLORS.slate }, className: "text-[11px] mt-0.5" }, m.label)
+        );
+      })
+    ),
+    h("div", { style: { background: COLORS.ink }, className: "rounded-2xl px-4 py-3 text-white text-sm" }, socialToday + " advisor" + (socialToday !== 1 ? "s" : "") + " posted on social media today"),
+    h("div", null,
+      h(SectionTitle, { label: "Today's Funnel" }),
+      h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4 space-y-2.5" },
+        funnelData.map(function (f) {
+          return h("div", { key: f.key, className: "flex items-center gap-3" },
+            h("div", { style: { color: COLORS.slate }, className: "text-xs w-24 shrink-0" }, f.short),
+            h("div", { style: { background: COLORS.parchment }, className: "flex-1 h-6 rounded-full overflow-hidden" },
+              h("div", { style: { width: ((f.value / maxFunnel) * 100) + "%", background: COLORS.brass, minWidth: f.value > 0 ? "8%" : "0%" }, className: "h-full rounded-full" })
+            ),
+            h("div", { style: { color: COLORS.ink }, className: "font-mono text-sm w-6 text-right" }, f.value)
+          );
+        })
+      )
+    ),
+    h("div", null,
+      h(SectionTitle, { label: "This Week's Leaderboard" }),
+      leaderboard.length === 0
+        ? h("div", { style: { background: COLORS.card, borderColor: COLORS.line, color: COLORS.slate }, className: "rounded-2xl border p-5 text-sm text-center" }, "No activity logged yet this week.")
+        : h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border divide-y" },
+            leaderboard.map(function (row, i) {
+              return h("div", { key: row.code, style: { borderColor: COLORS.line, background: row.code === myCode ? COLORS.parchment : "transparent" }, className: "flex items-center gap-3 px-4 py-3" },
+                h("div", { style: { background: i === 0 ? COLORS.brass : COLORS.parchment, color: i === 0 ? "white" : COLORS.slate }, className: "font-mono text-xs w-6 h-6 rounded-full flex items-center justify-center shrink-0" }, i + 1),
+                h("div", { style: { color: COLORS.ink }, className: "font-medium text-sm flex-1" }, row.name),
+                h("div", { className: "flex gap-3 font-mono text-xs", style: { color: COLORS.slate } },
+                  h("span", null, (row.appts || 0) + " appt"),
+                  h("span", { style: { color: COLORS.brass, fontWeight: 600 } }, (row.closed || 0) + " closed")
+                )
+              );
+            })
+          )
+    ),
+    h("div", null,
+      h(SectionTitle, { label: "7-Day Trend — Team Totals" }),
+      h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4" },
+        h(TrendChart, { data: trendData }),
+        h("div", { className: "flex flex-wrap gap-3 mt-2 justify-center" },
+          METRICS.map(function (m) {
+            return h("div", { key: m.key, className: "flex items-center gap-1.5" },
+              h("div", { style: { background: m.color }, className: "w-2.5 h-2.5 rounded-full" }),
+              h("span", { style: { color: COLORS.slate }, className: "text-[11px]" }, m.short)
+            );
+          })
+        )
+      )
+    )
+  );
+}
+
+function ManagerView(props) {
+  var date = props.date, roster = props.roster, teamEntries = props.teamEntries, loading = props.loading, onRefresh = props.onRefresh,
+    missingToday = props.missingToday, loggedTodayCount = props.loggedTodayCount, targets = props.targets, onSaveTargets = props.onSaveTargets;
+  var selectedState = useState(null); var selected = selectedState[0], setSelected = selectedState[1];
+  var editState = useState(false); var editingTargets = editState[0], setEditingTargets = editState[1];
+  var draftState = useState(targets); var draft = draftState[0], setDraft = draftState[1];
+  var exportState = useState(false); var showExport = exportState[0], setShowExport = exportState[1];
+
+  var csv = useMemo(function () {
+    var cutoff = todayStr(-59);
+    var header = ["Advisor", "Code", "Date"].concat(METRICS.map(function (m) { return m.label; }), ["Social", "Note"]);
+    var rows = [header];
+    teamEntries.filter(function (e) { return e.entry_date >= cutoff; }).sort(function (a, b) { return a.entry_date < b.entry_date ? 1 : -1; }).forEach(function (e) {
+      var advisor = roster.filter(function (r) { return r.code === e.advisor_code; })[0];
+      var row = [advisor ? advisor.name : e.advisor_code, e.advisor_code, e.entry_date]
+        .concat(METRICS.map(function (m) { return e[m.key] || 0; }))
+        .concat([e.social ? "yes" : "no", '"' + (e.note || "").replace(/"/g, '""') + '"']);
+      rows.push(row);
+    });
+    return rows.map(function (r) { return r.join(","); }).join("\n");
+  }, [teamEntries, roster]);
+
+  var advisorRows = roster.map(function (r) {
+    var todayEntry = teamEntries.filter(function (e) { return e.advisor_code === r.code && e.entry_date === date; })[0];
+    var total = entryTotal(todayEntry);
+    var isOpen = selected === r.code;
+    var history = teamEntries.filter(function (e) { return e.advisor_code === r.code; }).sort(function (a, b) { return a.entry_date < b.entry_date ? 1 : -1; }).slice(0, 14);
+    return h("div", { key: r.code },
+      h("button", { onClick: function () { setSelected(isOpen ? null : r.code); }, className: "w-full px-4 py-3 flex items-center gap-3 text-left" },
+        h("span", { style: { color: total > 0 ? COLORS.good : COLORS.rust } }, "●"),
+        h("div", { className: "flex-1" },
+          h("div", { style: { color: COLORS.ink }, className: "font-medium text-sm" }, r.name),
+          h("div", { style: { color: COLORS.slate }, className: "font-mono text-[10px]" }, total + " logged today")
+        ),
+        h("span", { style: { color: COLORS.slate } }, isOpen ? "▾" : "▸")
+      ),
+      isOpen && h("div", { style: { background: COLORS.parchment }, className: "px-4 pb-3 space-y-2" },
+        history.length === 0
+          ? h("div", { style: { color: COLORS.slate }, className: "text-xs py-2" }, "No history yet.")
+          : history.map(function (e) {
+              return h("div", { key: e.id, style: { borderColor: COLORS.line }, className: "border rounded-xl p-2.5" },
+                h("div", { className: "flex items-center justify-between mb-1.5" },
+                  h("span", { style: { color: COLORS.ink }, className: "font-mono text-[11px] font-semibold" }, shortDate(e.entry_date)),
+                  h("span", { style: { color: COLORS.brass }, className: "font-mono text-[11px]" }, entryTotal(e) + " total")
+                ),
+                e.note && h("div", { style: { color: COLORS.slate }, className: "text-[11px] italic" }, '"' + e.note + '"')
+              );
+            })
+      )
+    );
+  });
+
+  return h("div", { className: "px-5 mt-6 space-y-6" },
+    h("div", { className: "flex items-center justify-between" },
+      h("div", { style: { color: COLORS.slate }, className: "text-xs font-mono uppercase tracking-wide" }, "Manager view"),
+      h("button", { onClick: onRefresh, style: { color: COLORS.brass }, className: "text-xs font-mono" }, loading ? "…" : "refresh")
+    ),
+    h("div", { style: { background: COLORS.ink }, className: "rounded-2xl p-4 flex items-baseline justify-between" },
+      h("span", { className: "text-white font-display text-2xl" }, loggedTodayCount + "/" + roster.length),
+      h("span", { style: { color: "rgba(255,255,255,0.6)" }, className: "text-xs" }, "logged something today")
+    ),
+    h("div", null,
+      h(SectionTitle, { label: "Not Logged Today" }),
+      missingToday.length === 0
+        ? h("div", { style: { background: COLORS.card, borderColor: COLORS.line, color: COLORS.good }, className: "rounded-2xl border p-4 text-sm text-center" }, "Everyone has logged something today.")
+        : h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border divide-y" },
+            missingToday.map(function (r) { return h("div", { key: r.code, className: "px-4 py-3 text-sm", style: { color: COLORS.ink } }, r.name); })
+          )
+    ),
+    h("div", null,
+      h("div", { className: "flex items-center justify-between mb-2.5" },
+        h(SectionTitle, { label: "Daily Targets", bare: true }),
+        h("button", { onClick: function () { setDraft(targets); setEditingTargets(!editingTargets); }, style: { color: COLORS.brass }, className: "text-xs font-mono" }, editingTargets ? "cancel" : "edit")
+      ),
+      h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4 space-y-2.5" },
+        METRICS.map(function (m) {
+          return h("div", { key: m.key, className: "flex items-center justify-between gap-3" },
+            h("span", { style: { color: COLORS.ink }, className: "text-sm" }, m.label),
+            editingTargets
+              ? h("input", {
+                  type: "number", min: 0, value: draft[m.key] || 0,
+                  onChange: function (ev) { var d = Object.assign({}, draft); d[m.key] = Math.max(0, parseInt(ev.target.value) || 0); setDraft(d); },
+                  style: { borderColor: COLORS.line, background: COLORS.parchment, color: COLORS.ink }, className: "w-16 px-2 py-1 rounded-lg border text-center font-mono text-sm"
+                })
+              : h("span", { style: { color: COLORS.brass }, className: "font-mono text-sm font-semibold" }, targets[m.key] || 0)
+          );
+        }),
+        editingTargets && h("button", { onClick: function () { onSaveTargets(draft); setEditingTargets(false); }, style: { background: COLORS.ink }, className: "w-full py-2.5 rounded-xl text-white text-sm font-medium mt-2" }, "Save targets")
+      )
+    ),
+    h("div", null,
+      h(SectionTitle, { label: "Advisors" }),
+      h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border divide-y" }, advisorRows)
+    ),
+    h("button", { onClick: function () { setShowExport(true); }, style: { borderColor: COLORS.line, color: COLORS.ink }, className: "w-full py-3 rounded-2xl border font-medium text-sm" }, "Export last 60 days as CSV"),
+    showExport && h("div", { className: "fixed inset-0 flex items-center justify-center px-5", style: { background: "rgba(31,61,52,0.55)" } },
+      h("div", { style: { background: COLORS.card }, className: "w-full max-w-md rounded-3xl p-5 max-h-[80vh] flex flex-col" },
+        h("div", { className: "flex items-center justify-between mb-3" },
+          h("div", { style: { color: COLORS.ink }, className: "font-display text-lg" }, "Export CSV"),
+          h("button", { onClick: function () { setShowExport(false); }, style: { color: COLORS.slate } }, "✕")
+        ),
+        h("textarea", {
+          readOnly: true, value: csv || "No data yet.", onFocus: function (ev) { ev.target.select(); },
+          style: { borderColor: COLORS.line, background: COLORS.parchment, color: COLORS.ink }, className: "flex-1 w-full px-3 py-2.5 rounded-xl border outline-none text-[11px] font-mono resize-none", rows: 10
+        }),
+        h("button", { onClick: function () { navigator.clipboard.writeText(csv).catch(function () {}); }, style: { background: COLORS.ink }, className: "w-full py-3 rounded-2xl text-white font-medium mt-3" }, "Copy to clipboard")
+      )
+    )
+  );
+}
+
+function SectionTitle(props) {
+  return h("div", { className: props.bare ? "" : "mb-2.5" }, h("span", { style: { color: COLORS.ink }, className: "font-display text-base" }, props.label));
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(h(App));
+})();
+</script>
+</body>
+</html>

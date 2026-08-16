@@ -27,11 +27,11 @@
 <!-- deploying — Project Settings → API in your Supabase dashboard -->
 <!-- ============================================================ -->
 <script>
-  window.SUPABASE_URL = "YOUR_SUPABASE_URL";
-  window.SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
+  window.SUPABASE_URL = "https://chymjohbkwopbcdssfoo.supabase.co";
+  window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNoeW1qb2hia3dvcGJjZHNzZm9vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4ODgzMTksImV4cCI6MjEwMjQ2NDMxOX0.wzQsGd-ohaFxz9vknvRUvWXVYnUKGZOLWSumOf2_Da8";
 </script>
 
-<script type="text/babel" data-presets="react">
+<script type="text/plain" id="app-source">
 const { useState, useEffect, useMemo } = React;
 const sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 
@@ -639,6 +639,17 @@ function SectionTitle({ label, bare }) {
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+<script>
+  // Compile the app source explicitly with the classic JSX runtime.
+  // (Babel's automatic script-tag scanning defaults to a runtime that
+  // inserts an `import` statement, which fails outside a module — this
+  // avoids that entirely.)
+  var source = document.getElementById("app-source").textContent;
+  var output = Babel.transform(source, { presets: [["react", { runtime: "classic" }]] }).code;
+  var script = document.createElement("script");
+  script.textContent = output;
+  document.body.appendChild(script);
 </script>
 </body>
 </html>

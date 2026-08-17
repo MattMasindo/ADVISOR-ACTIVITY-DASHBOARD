@@ -48,17 +48,23 @@ var METRICS = [
   { key: "closed", label: "Clients Closed", short: "Closed", color: COLORS.rust }
 ];
  
+function localDateStr(d) {
+  var y = d.getFullYear();
+  var m = String(d.getMonth() + 1).padStart(2, "0");
+  var day = String(d.getDate()).padStart(2, "0");
+  return y + "-" + m + "-" + day;
+}
 function todayStr(offset) {
   offset = offset || 0;
   var d = new Date();
   d.setDate(d.getDate() + offset);
-  return d.toISOString().slice(0, 10);
+  return localDateStr(d);
 }
 function startOfWeek(dateStr) {
   var d = new Date(dateStr + "T00:00:00");
   var day = d.getDay();
   d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
-  return d.toISOString().slice(0, 10);
+  return localDateStr(d);
 }
 function prettyDate(dateStr) {
   return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
@@ -88,6 +94,23 @@ function isFullFunnel(e) {
 function referralPayout(r) {
   return (r.signed_paid ? 500 : 0) + (r.coded_paid ? 1000 : 0) + (r.retained_paid ? 1500 : 0);
 }
+function computeReceivable(code, referrals, monthBoards) {
+  var mine = referrals.filter(function (r) { return r.recipient_code === code; });
+  var confirmed = mine.reduce(function (s, r) {
+    var owed = 0;
+    if (r.contract_signed && !r.signed_paid) owed += 500;
+    if (r.apps_3 && !r.coded_paid) owed += 1000;
+    if (r.retained_90 && !r.retained_paid) owed += 1500;
+    return s + owed;
+  }, 0);
+  var projected = LANES.reduce(function (s, lane) {
+    var rows = monthBoards[lane.key] || [];
+    var leader = rows.length ? rows[0] : null;
+    var leading = !!(leader && leader.code === code && leader[lane.key] > 0);
+    return s + (leading ? LANE_AMOUNTS[lane.key] : 0);
+  }, 0);
+  return { confirmed: confirmed, projected: projected, total: confirmed + projected };
+}
 function fmtPhp(n) { return "\u20b1" + Math.round(n || 0).toLocaleString(); }
 function delay(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 async function withRetry(fn, retries) {
@@ -102,7 +125,7 @@ async function withRetry(fn, retries) {
 function nextWeekdayStr(dateStr) {
   var d = new Date(dateStr + "T00:00:00");
   do { d.setDate(d.getDate() + 1); } while (d.getDay() === 0 || d.getDay() === 6);
-  return d.toISOString().slice(0, 10);
+  return localDateStr(d);
 }
 function bestStreakFrom(entriesMap) {
   var dates = Object.keys(entriesMap).filter(function (d) {
@@ -123,7 +146,7 @@ function currentStreakFrom(entriesMap) {
     var d = new Date(); d.setDate(d.getDate() - offset);
     var dow = d.getDay();
     if (dow === 0 || dow === 6) { offset++; continue; }
-    var ds = d.toISOString().slice(0, 10);
+    var ds = localDateStr(d);
     if (entriesMap[ds]) { count++; offset++; }
     else if (offset === 0) { offset++; }
     else break;
@@ -225,6 +248,20 @@ function App() {
     return { ok: true };
   };
  
+  var setAdvisorActive = async function (code, active) {
+    setRoster(roster.map(function (r) { return r.code === code ? Object.assign({}, r, { active: active }) : r; }));
+    await sb.from("advisors").update({ active: active }).eq("code", code);
+  };
+ 
+  var addReferral = async function (candidateName, recipientCode) {
+    var name = (candidateName || "").trim();
+    if (!name) return { ok: false, message: "Enter the candidate's name." };
+    var res = await sb.from("referrals").insert({ candidate_name: name, recipient_code: recipientCode, stage: "Attended Forum" });
+    if (res.error) return { ok: false, message: "Couldn't save. Try again." };
+    await loadTeamData();
+    return { ok: true };
+  };
+ 
   var today = todayStr();
   var myCode = myIdentity ? myIdentity.code : undefined;
   var myTodayEntry = myEntries[today] || emptyEntry();
@@ -277,6 +314,8 @@ function App() {
     return false;
   };
  
+  var activeRoster = roster.filter(function (r) { return r.active !== false; });
+ 
   var todayRows = teamEntries.filter(function (e) { return e.entry_date === today; });
   var todayTotals = {};
   METRICS.forEach(function (m) {
@@ -289,8 +328,9 @@ function App() {
   var board = {};
   weekRows.forEach(function (e) {
     if (!board[e.advisor_code]) {
-      var advisor = roster.filter(function (r) { return r.code === e.advisor_code; })[0];
-      board[e.advisor_code] = { code: e.advisor_code, name: advisor ? advisor.name : e.advisor_code, social: 0 };
+      var advisor = activeRoster.filter(function (r) { return r.code === e.advisor_code; })[0];
+      if (!advisor) return;
+      board[e.advisor_code] = { code: e.advisor_code, name: advisor.name, social: 0 };
     }
     METRICS.forEach(function (m) { board[e.advisor_code][m.key] = (board[e.advisor_code][m.key] || 0) + (e[m.key] || 0); });
     if (e.social) board[e.advisor_code].social += 1;
@@ -308,8 +348,9 @@ function App() {
   var monthBoard = {};
   monthRows.forEach(function (e) {
     if (!monthBoard[e.advisor_code]) {
-      var advisor2 = roster.filter(function (r) { return r.code === e.advisor_code; })[0];
-      monthBoard[e.advisor_code] = { code: e.advisor_code, name: advisor2 ? advisor2.name : e.advisor_code, pipeline: 0, grind: 0, grosser: 0 };
+      var advisor2 = activeRoster.filter(function (r) { return r.code === e.advisor_code; })[0];
+      if (!advisor2) return;
+      monthBoard[e.advisor_code] = { code: e.advisor_code, name: advisor2.name, pipeline: 0, grind: 0, grosser: 0 };
     }
     monthBoard[e.advisor_code].pipeline += (e.prospecting || 0) + (e.approaching || 0);
     monthBoard[e.advisor_code].grind += (e.presented || 0);
@@ -333,10 +374,10 @@ function App() {
   });
  
   var funnelData = METRICS.map(function (m) { return Object.assign({}, m, { value: todayTotals[m.key] || 0 }); });
-  var missingToday = roster.filter(function (r) {
+  var missingToday = activeRoster.filter(function (r) {
     return entryTotal(todayRows.filter(function (e) { return e.advisor_code === r.code; })[0]) === 0;
   });
-  var loggedTodayCount = roster.length - missingToday.length;
+  var loggedTodayCount = activeRoster.length - missingToday.length;
  
   if (dbError) {
     return h("div", { style: { background: COLORS.parchment, minHeight: "100vh" }, className: "flex items-center justify-center px-6" },
@@ -385,19 +426,20 @@ function App() {
         teamCount: new Set(todayRows.map(function (e) { return e.advisor_code; })).size,
         leaderboard: leaderboard, trendData: trendData, funnelData: funnelData, myCode: myCode, loading: teamLoading, onRefresh: loadTeamData,
         myWeekDayLabels: myWeekDayLabels, monthBoards: monthBoards, myReferrals: myReferrals,
-        currentStreak: currentStreak, bestStreak: bestStreak
+        currentStreak: currentStreak, bestStreak: bestStreak, onAddReferral: function (name) { return addReferral(name, myCode); }
       }),
       view === "manager" && isManager && h(ManagerView, {
-        date: today, roster: roster, teamEntries: teamEntries, loading: teamLoading, onRefresh: loadTeamData,
+        date: today, roster: roster, activeRoster: activeRoster, teamEntries: teamEntries, loading: teamLoading, onRefresh: loadTeamData,
         missingToday: missingToday, loggedTodayCount: loggedTodayCount, targets: targets, onSaveTargets: saveTargets,
-        todayRows: todayRows, monthBoards: monthBoards, referrals: referrals, onUpdateReferral: updateReferral
+        todayRows: todayRows, monthBoards: monthBoards, referrals: referrals, onUpdateReferral: updateReferral,
+        onSetAdvisorActive: setAdvisorActive
       })
     );
   }
  
   return h("div", { style: { background: COLORS.parchment, minHeight: "100vh" } },
     showOnboarding
-      ? h(Onboarding, { roster: roster, onChoose: chooseAdvisor, onCreate: createAdvisor, cancelable: !!myIdentity, onCancel: function () { setSwitching(false); } })
+      ? h(Onboarding, { roster: activeRoster, onChoose: chooseAdvisor, onCreate: createAdvisor, cancelable: !!myIdentity, onCancel: function () { setSwitching(false); } })
       : mainBody,
     showManagerGate && h(ManagerGate, { hasPin: hasManagerPin, onSubmit: unlockManager, onClose: function () { setShowManagerGate(false); } })
   );
@@ -534,6 +576,19 @@ function TrendChart(props) {
   );
 }
  
+function MedalIcon(props) {
+  var earned = props.earned;
+  var face = earned ? COLORS.brass : COLORS.parchment;
+  var ribbon = earned ? COLORS.emphasis : COLORS.line;
+  var mark = earned ? "white" : COLORS.slate;
+  var ring = earned ? COLORS.brassLight : COLORS.line;
+  return h("svg", { width: "30", height: "30", viewBox: "0 0 24 24" },
+    h("path", { d: "M8.2 12.5 L5 22 L9 19.8 L11.2 22.3 L9.3 13", fill: ribbon }),
+    h("path", { d: "M15.8 12.5 L19 22 L15 19.8 L12.8 22.3 L14.7 13", fill: ribbon }),
+    h("circle", { cx: "12", cy: "9", r: "7.5", fill: face, stroke: ring, strokeWidth: "1" }),
+    h("path", { d: "M8.6 9.2 L10.7 11.2 L15.2 6.4", fill: "none", stroke: mark, strokeWidth: "1.7", strokeLinecap: "round", strokeLinejoin: "round" })
+  );
+}
 function AdvisorView(props) {
   var date = props.date, entry = props.entry, pulse = props.pulse, targets = props.targets, saveError = props.saveError,
     onBump = props.onBump, onToggleSocial = props.onToggleSocial, onNote = props.onNote, onFyp = props.onFyp,
@@ -541,7 +596,20 @@ function AdvisorView(props) {
     leaderboard = props.leaderboard, trendData = props.trendData, funnelData = props.funnelData,
     myCode = props.myCode, loading = props.loading, onRefresh = props.onRefresh,
     myWeekDayLabels = props.myWeekDayLabels || [], monthBoards = props.monthBoards || { pipeline: [], grind: [], grosser: [] },
-    myReferrals = props.myReferrals || [], currentStreak = props.currentStreak || 0, bestStreak = props.bestStreak || 0;
+    myReferrals = props.myReferrals || [], currentStreak = props.currentStreak || 0, bestStreak = props.bestStreak || 0,
+    onAddReferral = props.onAddReferral;
+ 
+  var newRefState = useState(""); var newRefName = newRefState[0], setNewRefName = newRefState[1];
+  var refSavingState = useState(false); var refSaving = refSavingState[0], setRefSaving = refSavingState[1];
+  var refMsgState = useState(""); var refMsg = refMsgState[0], setRefMsg = refMsgState[1];
+  var submitReferral = async function () {
+    if (!newRefName.trim()) { setRefMsg("Enter a name first."); return; }
+    setRefSaving(true);
+    var res = await onAddReferral(newRefName);
+    setRefSaving(false);
+    if (res && res.ok) { setNewRefName(""); setRefMsg("Added \u2014 your manager will confirm progress from here."); }
+    else { setRefMsg((res && res.message) || "Couldn't save. Try again."); }
+  };
  
   var maxFunnel = Math.max.apply(null, [1].concat(funnelData.map(function (f) { return f.value; })));
   var myDaysLogged = myWeekDayLabels.length;
@@ -627,12 +695,25 @@ function AdvisorView(props) {
       )
     ),
  
-    myReferrals.length > 0 && h("div", null,
+    h("div", null,
       h("div", { className: "flex items-baseline justify-between mb-2.5" },
         h("span", { style: { color: COLORS.ink }, className: "font-display text-base" }, "Your growth investment"),
-        h("span", { style: { color: COLORS.brass }, className: "font-display text-xl" }, fmtPhp(earnedTotal))
+        earnedTotal > 0 && h("span", { style: { color: COLORS.brass }, className: "font-display text-xl" }, fmtPhp(earnedTotal))
       ),
-      h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border divide-y", },
+      h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4 mb-2" },
+        h("div", { style: { color: COLORS.slate }, className: "text-xs font-mono uppercase tracking-wide mb-2" }, "Refer a candidate"),
+        h("div", { className: "flex gap-2" },
+          h("input", {
+            value: newRefName, onChange: function (ev) { setNewRefName(ev.target.value); },
+            onKeyDown: function (ev) { if (ev.key === "Enter") submitReferral(); },
+            placeholder: "Candidate's full name",
+            style: { borderColor: COLORS.line, background: COLORS.parchment, color: COLORS.ink }, className: "flex-1 px-3 py-2.5 rounded-xl border outline-none focus:ring-2 text-sm"
+          }),
+          h("button", { onClick: submitReferral, disabled: refSaving, style: { background: COLORS.emphasis }, className: "px-4 rounded-xl text-white text-sm font-medium" }, refSaving ? "\u2026" : "Add")
+        ),
+        refMsg && h("div", { style: { color: COLORS.slate }, className: "text-[11px] mt-2" }, refMsg)
+      ),
+      myReferrals.length > 0 && h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border divide-y", },
         myReferrals.map(function (r) {
           return h("div", { key: r.id, style: { borderColor: COLORS.line }, className: "px-4 py-3.5 flex items-center justify-between" },
             h("div", null,
@@ -690,9 +771,10 @@ function AdvisorView(props) {
           BADGE_LEVELS.map(function (n) {
             var earned = bestStreak >= n;
             var toGo = Math.max(0, n - currentStreak);
-            return h("div", { key: n, style: { background: earned ? "rgba(242,183,5,0.14)" : COLORS.parchment, borderColor: earned ? COLORS.brass : COLORS.line }, className: "rounded-xl border py-2.5 text-center" },
+            return h("div", { key: n, style: { background: earned ? "rgba(242,183,5,0.14)" : COLORS.parchment, borderColor: earned ? COLORS.brass : COLORS.line }, className: "rounded-xl border py-2.5 text-center flex flex-col items-center gap-1" },
+              h(MedalIcon, { earned: earned }),
               h("div", { style: { color: earned ? COLORS.brass : COLORS.ink }, className: "font-display text-sm" }, n + "-Day"),
-              h("div", { style: { color: earned ? COLORS.brass : COLORS.slate }, className: "text-[9px] mt-0.5" }, earned ? "Earned" : toGo + " to go")
+              h("div", { style: { color: earned ? COLORS.brass : COLORS.slate }, className: "text-[9px]" }, earned ? "Earned" : toGo + " to go")
             );
           })
         )
@@ -804,9 +886,10 @@ function AdvisorView(props) {
 }
  
 function ManagerView(props) {
-  var date = props.date, roster = props.roster, teamEntries = props.teamEntries, loading = props.loading, onRefresh = props.onRefresh,
+  var date = props.date, roster = props.roster, activeRoster = props.activeRoster || props.roster, teamEntries = props.teamEntries, loading = props.loading, onRefresh = props.onRefresh,
     missingToday = props.missingToday, loggedTodayCount = props.loggedTodayCount, targets = props.targets, onSaveTargets = props.onSaveTargets,
-    todayRows = props.todayRows || [], monthBoards = props.monthBoards || { pipeline: [], grind: [], grosser: [] }, referrals = props.referrals || [], onUpdateReferral = props.onUpdateReferral;
+    todayRows = props.todayRows || [], monthBoards = props.monthBoards || { pipeline: [], grind: [], grosser: [] }, referrals = props.referrals || [], onUpdateReferral = props.onUpdateReferral,
+    onSetAdvisorActive = props.onSetAdvisorActive;
   var selectedState = useState(null); var selected = selectedState[0], setSelected = selectedState[1];
   var editState = useState(false); var editingTargets = editState[0], setEditingTargets = editState[1];
   var draftState = useState(targets); var draft = draftState[0], setDraft = draftState[1];
@@ -832,16 +915,24 @@ function ManagerView(props) {
     var total = entryTotal(todayEntry);
     var isOpen = selected === r.code;
     var history = teamEntries.filter(function (e) { return e.advisor_code === r.code; }).sort(function (a, b) { return a.entry_date < b.entry_date ? 1 : -1; }).slice(0, 14);
-    return h("div", { key: r.code },
+    return h("div", { key: r.code, style: { opacity: r.active === false ? 0.55 : 1 } },
       h("button", { onClick: function () { setSelected(isOpen ? null : r.code); }, className: "w-full px-4 py-3 flex items-center gap-3 text-left" },
-        h("span", { style: { color: total > 0 ? COLORS.good : COLORS.rust } }, "●"),
+        h("span", { style: { color: r.active === false ? COLORS.slate : (total > 0 ? COLORS.good : COLORS.rust) } }, "●"),
         h("div", { className: "flex-1" },
-          h("div", { style: { color: COLORS.ink }, className: "font-medium text-sm" }, r.name),
+          h("div", { style: { color: COLORS.ink }, className: "font-medium text-sm" }, r.name + (r.active === false ? " (removed)" : "")),
           h("div", { style: { color: COLORS.slate }, className: "font-mono text-[10px]" }, total + " logged today")
         ),
         h("span", { style: { color: COLORS.slate } }, isOpen ? "▾" : "▸")
       ),
       isOpen && h("div", { style: { background: COLORS.parchment }, className: "px-4 pb-3 space-y-2" },
+        h("button", {
+          onClick: function () {
+            var msg = r.active === false ? "Restore " + r.name + " to the active team?" : "Remove " + r.name + " from the team? Their history stays intact and can be restored later.";
+            if (window.confirm(msg)) onSetAdvisorActive(r.code, r.active === false);
+          },
+          style: { borderColor: r.active === false ? COLORS.good : COLORS.rust, color: r.active === false ? COLORS.good : COLORS.rust },
+          className: "w-full py-2 rounded-xl border text-xs font-medium mb-2"
+        }, r.active === false ? "Restore to team" : "Remove from team"),
         history.length === 0
           ? h("div", { style: { color: COLORS.slate }, className: "text-xs py-2" }, "No history yet.")
           : history.map(function (e) {
@@ -939,6 +1030,25 @@ function ManagerView(props) {
       )
     ),
     h("div", null,
+      h(SectionTitle, { label: "Incentive Receivable \u2014 Team" }),
+      h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border divide-y" },
+        activeRoster.map(function (r) {
+          var rec = computeReceivable(r.code, referrals, monthBoards);
+          return h("div", { key: r.code, className: "flex items-center justify-between px-4 py-3" },
+            h("div", { style: { color: COLORS.ink }, className: "text-sm font-medium" }, r.name),
+            h("div", { className: "text-right" },
+              h("div", { style: { color: COLORS.brass }, className: "font-mono text-sm font-semibold" }, fmtPhp(rec.total)),
+              rec.projected > 0 && h("div", { style: { color: COLORS.slate }, className: "text-[10px]" }, fmtPhp(rec.confirmed) + " confirmed + " + fmtPhp(rec.projected) + " proj.")
+            )
+          );
+        })
+      ),
+      h("div", { style: { background: COLORS.emphasis }, className: "rounded-2xl px-4 py-3 flex items-center justify-between mt-2" },
+        h("span", { className: "text-white text-sm font-medium" }, "Total to release this cycle"),
+        h("span", { className: "text-white font-display text-lg" }, fmtPhp(activeRoster.reduce(function (s, r) { return s + computeReceivable(r.code, referrals, monthBoards).total; }, 0)))
+      )
+    ),
+    h("div", null,
       h(SectionTitle, { label: "Growth Investment Tracker" }),
       referrals.length === 0
         ? h("div", { style: { background: COLORS.card, borderColor: COLORS.line, color: COLORS.slate }, className: "rounded-2xl border p-5 text-sm text-center" }, "No referral candidates yet.")
@@ -953,6 +1063,23 @@ function ManagerView(props) {
                   ),
                   h("div", { style: { color: COLORS.brass }, className: "font-mono text-sm font-semibold" }, fmtPhp(referralPayout(r)))
                 ),
+                h("div", { style: { color: COLORS.slate }, className: "text-[10px] uppercase tracking-wide font-mono mt-1" }, "Progress"),
+                h("div", { className: "flex flex-wrap gap-4" },
+                  [
+                    { field: "contract_signed", label: "Contract signed" },
+                    { field: "apps_3", label: "3 apps submitted" },
+                    { field: "retained_90", label: "90-day retained" }
+                  ].map(function (m) {
+                    return h("label", { key: m.field, className: "flex items-center gap-1.5" },
+                      h("input", {
+                        type: "checkbox", checked: !!r[m.field],
+                        onChange: function (ev) { onUpdateReferral(r.id, m.field, ev.target.checked); }
+                      }),
+                      h("span", { style: { color: COLORS.ink }, className: "text-[11px]" }, m.label)
+                    );
+                  })
+                ),
+                h("div", { style: { color: COLORS.slate }, className: "text-[10px] uppercase tracking-wide font-mono mt-2" }, "Payout sent"),
                 h("div", { className: "flex flex-wrap gap-4" },
                   [
                     { field: "signed_paid", label: "Signed \u20b1500", gate: r.contract_signed, gateLabel: "contract not signed yet" },

@@ -21,16 +21,11 @@
 <body>
 <div id="root"></div>
 
-<!-- ============================================================ -->
-<!-- Fill these in with your own Supabase project's values before  -->
-<!-- deploying — Project Settings → API in your Supabase dashboard -->
-<!-- ============================================================ -->
 <script>
   window.SUPABASE_URL = "https://chymjohbkwopbcdssfoo.supabase.co";
   window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNoeW1qb2hia3dvcGJjZHNzZm9vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4ODgzMTksImV4cCI6MjEwMjQ2NDMxOX0.wzQsGd-ohaFxz9vknvRUvWXVYnUKGZOLWSumOf2_Da8";
 </script>
 
-<!-- Plain JavaScript below — no JSX, no in-browser compilation step. -->
 <script>
 (function () {
 "use strict";
@@ -127,7 +122,6 @@ function App() {
       }
       setLoading(false);
     })();
-    // eslint-disable-next-line
   }, []);
 
   var loadTeamData = async function () {
@@ -139,7 +133,6 @@ function App() {
 
   useEffect(function () {
     if (view === "team" || view === "manager") loadTeamData();
-    // eslint-disable-next-line
   }, [view]);
 
   var chooseAdvisor = async function (identity) {
@@ -259,47 +252,52 @@ function App() {
     );
   }
 
-  var tabsRow = h("div", { className: "flex mt-5 rounded-xl overflow-hidden border border-white/15" },
-    ["log", "team", "manager"].map(function (v) {
-      return h("button", {
-        key: v,
-        onClick: function () { v === "manager" ? (isManager ? setView("manager") : setShowManagerGate(true)) : setView(v); },
-        className: "flex-1 py-2.5 text-sm font-medium",
-        style: { background: view === v ? COLORS.brass : "transparent", color: view === v ? COLORS.ink : "rgba(255,255,255,0.75)" }
-      }, v === "log" ? "Log Activity" : v === "team" ? "Team Board" : "Manager");
-    })
-  );
+  var showOnboarding = !myIdentity || switching;
 
-  var header = h("div", { style: { background: COLORS.ink }, className: "px-5 pt-6 pb-5 rounded-b-3xl" },
-    h("div", { className: "flex items-center justify-between" },
-      h("div", null,
-        h("div", { style: { color: COLORS.brassLight }, className: "text-[11px] tracking-[0.2em] uppercase font-mono" }, "Field Log"),
-        h("div", { className: "font-display text-white text-2xl mt-0.5" }, myIdentity.name)
+  var mainBody = null;
+  if (!showOnboarding) {
+    var tabsRow = h("div", { className: "flex mt-5 rounded-xl overflow-hidden border border-white/15" },
+      ["log", "team", "manager"].map(function (v) {
+        return h("button", {
+          key: v,
+          onClick: function () { v === "manager" ? (isManager ? setView("manager") : setShowManagerGate(true)) : setView(v); },
+          className: "flex-1 py-2.5 text-sm font-medium",
+          style: { background: view === v ? COLORS.brass : "transparent", color: view === v ? COLORS.ink : "rgba(255,255,255,0.75)" }
+        }, v === "log" ? "Log Activity" : v === "team" ? "Team Board" : "Manager");
+      })
+    );
+
+    var header = h("div", { style: { background: COLORS.ink }, className: "px-5 pt-6 pb-5 rounded-b-3xl" },
+      h("div", { className: "flex items-center justify-between" },
+        h("div", null,
+          h("div", { style: { color: COLORS.brassLight }, className: "text-[11px] tracking-[0.2em] uppercase font-mono" }, "Field Log"),
+          h("div", { className: "font-display text-white text-2xl mt-0.5" }, myIdentity.name)
+        ),
+        h("button", { onClick: function () { setSwitching(true); }, className: "text-white/70 hover:text-white text-xs font-mono" }, "switch")
       ),
-      h("button", { onClick: function () { setSwitching(true); }, className: "text-white/70 hover:text-white text-xs font-mono" }, "switch")
-    ),
-    tabsRow
-  );
+      tabsRow
+    );
 
-  var mainBody = h("div", { className: "max-w-md mx-auto pb-10" },
-    header,
-    view === "log" && h(LogView, {
-      date: today, entry: myTodayEntry, pulse: pulse, targets: targets, saveError: saveError,
-      onBump: bump, onToggleSocial: function () { upsertField({ social: !myTodayEntry.social }); }, onNote: function (note) { upsertField({ note: note }); }
-    }),
-    view === "team" && h(TeamView, {
-      date: today, todayTotals: todayTotals, socialToday: socialToday,
-      teamCount: new Set(todayRows.map(function (e) { return e.advisor_code; })).size,
-      leaderboard: leaderboard, trendData: trendData, funnelData: funnelData, myCode: myCode, loading: teamLoading, onRefresh: loadTeamData
-    }),
-    view === "manager" && isManager && h(ManagerView, {
-      date: today, roster: roster, teamEntries: teamEntries, loading: teamLoading, onRefresh: loadTeamData,
-      missingToday: missingToday, loggedTodayCount: loggedTodayCount, targets: targets, onSaveTargets: saveTargets
-    })
-  );
+    mainBody = h("div", { className: "max-w-md mx-auto pb-10" },
+      header,
+      view === "log" && h(LogView, {
+        date: today, entry: myTodayEntry, pulse: pulse, targets: targets, saveError: saveError,
+        onBump: bump, onToggleSocial: function () { upsertField({ social: !myTodayEntry.social }); }, onNote: function (note) { upsertField({ note: note }); }
+      }),
+      view === "team" && h(TeamView, {
+        date: today, todayTotals: todayTotals, socialToday: socialToday,
+        teamCount: new Set(todayRows.map(function (e) { return e.advisor_code; })).size,
+        leaderboard: leaderboard, trendData: trendData, funnelData: funnelData, myCode: myCode, loading: teamLoading, onRefresh: loadTeamData
+      }),
+      view === "manager" && isManager && h(ManagerView, {
+        date: today, roster: roster, teamEntries: teamEntries, loading: teamLoading, onRefresh: loadTeamData,
+        missingToday: missingToday, loggedTodayCount: loggedTodayCount, targets: targets, onSaveTargets: saveTargets
+      })
+    );
+  }
 
   return h("div", { style: { background: COLORS.parchment, minHeight: "100vh" } },
-    (!myIdentity || switching)
+    showOnboarding
       ? h(Onboarding, { roster: roster, onChoose: chooseAdvisor, onCreate: createAdvisor, cancelable: !!myIdentity, onCancel: function () { setSwitching(false); } })
       : mainBody,
     showManagerGate && h(ManagerGate, { hasPin: hasManagerPin, onSubmit: unlockManager, onClose: function () { setShowManagerGate(false); } })

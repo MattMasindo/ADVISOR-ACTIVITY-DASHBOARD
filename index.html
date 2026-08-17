@@ -909,6 +909,7 @@ function ManagerView(props) {
   var draftState = useState(targets); var draft = draftState[0], setDraft = draftState[1];
   var exportState = useState(false); var showExport = exportState[0], setShowExport = exportState[1];
   var lbTabState = useState("pipeline"); var lbTab = lbTabState[0], setLbTab = lbTabState[1];
+  var searchState = useState(""); var search = searchState[0], setSearch = searchState[1];
  
   var csv = useMemo(function () {
     var cutoff = todayStr(-59);
@@ -1064,10 +1065,21 @@ function ManagerView(props) {
     ),
     h("div", null,
       h(SectionTitle, { label: "Growth Investment Tracker" }),
-      referrals.length === 0
-        ? h("div", { style: { background: COLORS.card, borderColor: COLORS.line, color: COLORS.slate }, className: "rounded-2xl border p-5 text-sm text-center" }, "No referral candidates yet.")
-        : h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border divide-y" },
-            referrals.map(function (r) {
+      referrals.length > 0 && h("input", {
+        value: search, onChange: function (ev) { setSearch(ev.target.value); },
+        placeholder: "Search candidate or advisor name",
+        style: { borderColor: COLORS.line, background: COLORS.card, color: COLORS.ink }, className: "w-full px-3 py-2.5 rounded-xl border outline-none focus:ring-2 text-sm mb-2.5"
+      }),
+      (function () {
+        var q = search.trim().toLowerCase();
+        var filtered = !q ? referrals : referrals.filter(function (r) {
+          var recipient = roster.filter(function (a) { return a.code === r.recipient_code; })[0];
+          return r.candidate_name.toLowerCase().indexOf(q) !== -1 || (recipient && recipient.name.toLowerCase().indexOf(q) !== -1);
+        });
+        if (referrals.length === 0) return h("div", { style: { background: COLORS.card, borderColor: COLORS.line, color: COLORS.slate }, className: "rounded-2xl border p-5 text-sm text-center" }, "No referral candidates yet.");
+        if (filtered.length === 0) return h("div", { style: { background: COLORS.card, borderColor: COLORS.line, color: COLORS.slate }, className: "rounded-2xl border p-5 text-sm text-center" }, "No match for \u201c" + search + "\u201d.");
+        return h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border divide-y" },
+            filtered.map(function (r) {
               var recipient = roster.filter(function (a) { return a.code === r.recipient_code; })[0];
               var days = daysSince(r.created_at);
               var needsReview = !r.retained_90 && days !== null && days >= 90;
@@ -1114,7 +1126,8 @@ function ManagerView(props) {
                 )
               );
             })
-          )
+          );
+      })()
     ),
     h("div", null,
       h(SectionTitle, { label: "Advisors" }),

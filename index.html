@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Advisor Activity Ledger</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
-  body { font-family: 'IBM Plex Sans', sans-serif; }
-  .font-display { font-family: 'Fraunces', serif; }
+  body { font-family: 'Inter', sans-serif; background: #0F131B; }
+  .font-display { font-family: 'Space Grotesk', sans-serif; }
   .font-mono { font-family: 'IBM Plex Mono', monospace; }
   @keyframes pop { 0% { transform: scale(1); } 40% { transform: scale(1.12); } 100% { transform: scale(1); } }
   .pop { animation: pop 0.4s ease; }
@@ -20,25 +20,25 @@
 </head>
 <body>
 <div id="root"></div>
-
+ 
 <script>
   window.SUPABASE_URL = "https://chymjohbkwopbcdssfoo.supabase.co";
   window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNoeW1qb2hia3dvcGJjZHNzZm9vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4ODgzMTksImV4cCI6MjEwMjQ2NDMxOX0.wzQsGd-ohaFxz9vknvRUvWXVYnUKGZOLWSumOf2_Da8";
 </script>
-
+ 
 <script>
 (function () {
 "use strict";
 var h = React.createElement;
 var useState = React.useState, useEffect = React.useEffect, useMemo = React.useMemo;
 var sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
-
+ 
 var COLORS = {
-  ink: "#1F3D34", inkLight: "#2E5548", parchment: "#EEF0E8", card: "#FBFBF7",
-  brass: "#B8863B", brassLight: "#D9B26B", slate: "#52606D", rust: "#A3502B",
-  line: "#DDE1D2", good: "#3E7A4C"
+  ink: "#EDEFF5", inkLight: "#2DD4BF", parchment: "#0F131B", card: "#171D29",
+  brass: "#F2B705", brassLight: "#F7CB55", slate: "#8891A6", rust: "#E24B4A",
+  line: "#2A3244", good: "#2DD4BF", emphasis: "#FF6A3D"
 };
-
+ 
 var METRICS = [
   { key: "prospecting", label: "New Prospects", short: "Prospecting", color: COLORS.slate },
   { key: "approaching", label: "Initial Approaches", short: "Approaching", color: COLORS.brassLight },
@@ -47,7 +47,7 @@ var METRICS = [
   { key: "presented", label: "Clients Presented", short: "Presented", color: COLORS.ink },
   { key: "closed", label: "Clients Closed", short: "Closed", color: COLORS.rust }
 ];
-
+ 
 function todayStr(offset) {
   offset = offset || 0;
   var d = new Date();
@@ -67,7 +67,7 @@ function shortDate(dateStr) {
   return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 function emptyEntry() {
-  var row = { social: false, note: "" };
+  var row = { social: false, note: "", fyp: 0 };
   METRICS.forEach(function (m) { row[m.key] = 0; });
   return row;
 }
@@ -77,7 +77,68 @@ function entryTotal(e) {
 }
 function lget(key) { try { return JSON.parse(localStorage.getItem(key)); } catch (err) { return null; } }
 function lset(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (err) {} }
-
+function startOfMonth(dateStr) { return dateStr.slice(0, 7) + "-01"; }
+function weekdayLabel(dateStr) {
+  var d = new Date(dateStr + "T00:00:00");
+  return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()];
+}
+function isFullFunnel(e) {
+  return !!e && (e.prospecting || 0) >= 1 && (e.relationship || 0) >= 1 && !!e.social;
+}
+function referralPayout(r) {
+  return (r.signed_paid ? 500 : 0) + (r.coded_paid ? 1000 : 0) + (r.retained_paid ? 1500 : 0);
+}
+function fmtPhp(n) { return "\u20b1" + Math.round(n || 0).toLocaleString(); }
+function delay(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+async function withRetry(fn, retries) {
+  retries = retries == null ? 2 : retries;
+  var res = await fn();
+  if (res && res.error && retries > 0) {
+    await delay(600);
+    return withRetry(fn, retries - 1);
+  }
+  return res;
+}
+function nextWeekdayStr(dateStr) {
+  var d = new Date(dateStr + "T00:00:00");
+  do { d.setDate(d.getDate() + 1); } while (d.getDay() === 0 || d.getDay() === 6);
+  return d.toISOString().slice(0, 10);
+}
+function bestStreakFrom(entriesMap) {
+  var dates = Object.keys(entriesMap).filter(function (d) {
+    var dow = new Date(d + "T00:00:00").getDay();
+    return dow !== 0 && dow !== 6;
+  }).sort();
+  var best = 0, run = 0, prev = null;
+  dates.forEach(function (d) {
+    run = (prev && d === nextWeekdayStr(prev)) ? run + 1 : 1;
+    if (run > best) best = run;
+    prev = d;
+  });
+  return best;
+}
+function currentStreakFrom(entriesMap) {
+  var count = 0, offset = 0;
+  while (offset < 400) {
+    var d = new Date(); d.setDate(d.getDate() - offset);
+    var dow = d.getDay();
+    if (dow === 0 || dow === 6) { offset++; continue; }
+    var ds = d.toISOString().slice(0, 10);
+    if (entriesMap[ds]) { count++; offset++; }
+    else if (offset === 0) { offset++; }
+    else break;
+  }
+  return count;
+}
+var WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+var BADGE_LEVELS = [10, 20, 30, 45, 90];
+var LANES = [
+  { key: "pipeline", label: "Pipeline Builder", hint: "New prospects + initial approaches, this month" },
+  { key: "grind", label: "Grind Master", hint: "Clients presented (FNA), this month · min. 15" },
+  { key: "grosser", label: "Top Grosser", hint: "FYP settled, this month" }
+];
+var LANE_AMOUNTS = { pipeline: 300, grind: 500, grosser: 700 };
+ 
 function App() {
   var loadingState = useState(true); var loading = loadingState[0], setLoading = loadingState[1];
   var dbErrorState = useState(null); var dbError = dbErrorState[0], setDbError = dbErrorState[1];
@@ -88,13 +149,14 @@ function App() {
   var isManagerState = useState(!!lget("is-manager")); var isManager = isManagerState[0], setIsManager = isManagerState[1];
   var myEntriesState = useState({}); var myEntries = myEntriesState[0], setMyEntries = myEntriesState[1];
   var teamEntriesState = useState([]); var teamEntries = teamEntriesState[0], setTeamEntries = teamEntriesState[1];
+  var referralsState = useState([]); var referrals = referralsState[0], setReferrals = referralsState[1];
   var teamLoadingState = useState(false); var teamLoading = teamLoadingState[0], setTeamLoading = teamLoadingState[1];
-  var viewState = useState("log"); var view = viewState[0], setView = viewState[1];
+  var viewState = useState("advisor"); var view = viewState[0], setView = viewState[1];
   var switchingState = useState(false); var switching = switchingState[0], setSwitching = switchingState[1];
   var pulseState = useState(null); var pulse = pulseState[0], setPulse = pulseState[1];
   var showGateState = useState(false); var showManagerGate = showGateState[0], setShowManagerGate = showGateState[1];
   var saveErrorState = useState(false); var saveError = saveErrorState[0], setSaveError = saveErrorState[1];
-
+ 
   useEffect(function () {
     (async function () {
       var results = await Promise.all([
@@ -113,7 +175,7 @@ function App() {
       (targetRes.data || []).forEach(function (t) { tMap[t.stage] = t.daily_target; });
       setTargets(tMap);
       setHasManagerPin(!!pinRes.data);
-
+ 
       if (myIdentity) {
         var er = await sb.from("entries").select("*").eq("advisor_code", myIdentity.code);
         var map = {};
@@ -123,18 +185,28 @@ function App() {
       setLoading(false);
     })();
   }, []);
-
+ 
   var loadTeamData = async function () {
     setTeamLoading(true);
-    var res = await sb.from("entries").select("*");
-    setTeamEntries(res.data || []);
+    var results = await Promise.all([
+      sb.from("entries").select("*"),
+      sb.from("referrals").select("*")
+    ]);
+    setTeamEntries(results[0].data || []);
+    setReferrals(results[1].data || []);
     setTeamLoading(false);
   };
-
+ 
+  var updateReferral = async function (id, field, value) {
+    var patch = {}; patch[field] = value;
+    setReferrals(referrals.map(function (r) { return r.id === id ? Object.assign({}, r, patch) : r; }));
+    await sb.from("referrals").update(patch).eq("id", id);
+  };
+ 
   useEffect(function () {
-    if (view === "team" || view === "manager") loadTeamData();
+    if (view === "advisor" || view === "manager") loadTeamData();
   }, [view]);
-
+ 
   var chooseAdvisor = async function (identity) {
     setMyIdentity(identity);
     lset("my-identity", identity);
@@ -144,7 +216,7 @@ function App() {
     (res.data || []).forEach(function (row) { map[row.entry_date] = row; });
     setMyEntries(map);
   };
-
+ 
   var createAdvisor = async function (info) {
     var res = await sb.from("advisors").insert({ name: info.name, code: info.code });
     if (res.error) return { ok: false, message: res.error.code === "23505" ? "That code is already taken — pick another." : "Couldn't save. Try again." };
@@ -152,11 +224,11 @@ function App() {
     await chooseAdvisor({ name: info.name, code: info.code });
     return { ok: true };
   };
-
+ 
   var today = todayStr();
   var myCode = myIdentity ? myIdentity.code : undefined;
   var myTodayEntry = myEntries[today] || emptyEntry();
-
+ 
   var bump = async function (key, delta) {
     var optimistic = Object.assign({}, myTodayEntry);
     optimistic[key] = Math.max(0, (myTodayEntry[key] || 0) + delta);
@@ -164,29 +236,29 @@ function App() {
     setMyEntries(newEntries);
     setPulse(key);
     setTimeout(function () { setPulse(null); }, 500);
-    var res = await sb.rpc("bump_metric", { p_code: myCode, p_date: today, p_field: key, p_delta: delta });
-    setSaveError(!!res.error);
-    if (!res.error) {
+    var res = await withRetry(function () { return sb.rpc("bump_metric", { p_code: myCode, p_date: today, p_field: key, p_delta: delta }); });
+    setSaveError(!!(res && res.error));
+    if (res && !res.error) {
       var row = await sb.from("entries").select("*").eq("advisor_code", myCode).eq("entry_date", today).single();
       if (row.data) setMyEntries(function (prev) { var next = Object.assign({}, prev); next[today] = row.data; return next; });
     }
   };
-
+ 
   var upsertField = async function (fields) {
     var updated = Object.assign({}, myTodayEntry, fields, { advisor_code: myCode, entry_date: today });
     var newEntries = Object.assign({}, myEntries); newEntries[today] = updated;
     setMyEntries(newEntries);
-    var res = await sb.from("entries").upsert(updated, { onConflict: "advisor_code,entry_date" });
-    setSaveError(!!res.error);
+    var res = await withRetry(function () { return sb.from("entries").upsert(updated, { onConflict: "advisor_code,entry_date" }); });
+    setSaveError(!!(res && res.error));
   };
-
+ 
   var saveTargets = async function (draft) {
     setTargets(draft);
     await Promise.all(Object.keys(draft).map(function (stage) {
       return sb.from("targets").upsert({ stage: stage, daily_target: draft[stage] }, { onConflict: "stage" });
     }));
   };
-
+ 
   var unlockManager = async function (pin) {
     if (!hasManagerPin) {
       var setRes = await sb.rpc("set_manager_pin_if_unset", { p_pin: pin });
@@ -204,14 +276,14 @@ function App() {
     }
     return false;
   };
-
+ 
   var todayRows = teamEntries.filter(function (e) { return e.entry_date === today; });
   var todayTotals = {};
   METRICS.forEach(function (m) {
     todayTotals[m.key] = todayRows.reduce(function (s, e) { return s + (e[m.key] || 0); }, 0);
   });
   var socialToday = todayRows.filter(function (e) { return e.social; }).length;
-
+ 
   var weekStart = startOfWeek(today);
   var weekRows = teamEntries.filter(function (e) { return e.entry_date >= weekStart && e.entry_date <= today; });
   var board = {};
@@ -226,7 +298,32 @@ function App() {
   var leaderboard = Object.keys(board).map(function (k) { return board[k]; }).sort(function (a, b) {
     return (b.closed || 0) - (a.closed || 0) || (b.appts || 0) - (a.appts || 0);
   });
-
+ 
+  var myWeekDayLabels = weekRows.filter(function (e) { return e.advisor_code === myCode; }).map(function (e) { return weekdayLabel(e.entry_date); });
+  var currentStreak = currentStreakFrom(myEntries);
+  var bestStreak = bestStreakFrom(myEntries);
+ 
+  var monthStart = startOfMonth(today);
+  var monthRows = teamEntries.filter(function (e) { return e.entry_date >= monthStart && e.entry_date <= today; });
+  var monthBoard = {};
+  monthRows.forEach(function (e) {
+    if (!monthBoard[e.advisor_code]) {
+      var advisor2 = roster.filter(function (r) { return r.code === e.advisor_code; })[0];
+      monthBoard[e.advisor_code] = { code: e.advisor_code, name: advisor2 ? advisor2.name : e.advisor_code, pipeline: 0, grind: 0, grosser: 0 };
+    }
+    monthBoard[e.advisor_code].pipeline += (e.prospecting || 0) + (e.approaching || 0);
+    monthBoard[e.advisor_code].grind += (e.presented || 0);
+    monthBoard[e.advisor_code].grosser += (e.fyp || 0);
+  });
+  var monthList = Object.keys(monthBoard).map(function (k) { return monthBoard[k]; });
+  var monthBoards = {
+    pipeline: monthList.slice().sort(function (a, b) { return b.pipeline - a.pipeline; }),
+    grind: monthList.slice().sort(function (a, b) { return b.grind - a.grind; }),
+    grosser: monthList.slice().sort(function (a, b) { return b.grosser - a.grosser; })
+  };
+ 
+  var myReferrals = referrals.filter(function (r) { return r.recipient_code === myCode; });
+ 
   var last7 = [0, 1, 2, 3, 4, 5, 6].map(function (i) { return todayStr(-6 + i); });
   var trendData = last7.map(function (d) {
     var rows = teamEntries.filter(function (e) { return e.entry_date === d; });
@@ -234,13 +331,13 @@ function App() {
     METRICS.forEach(function (m) { point[m.key] = rows.reduce(function (s, e) { return s + (e[m.key] || 0); }, 0); });
     return point;
   });
-
+ 
   var funnelData = METRICS.map(function (m) { return Object.assign({}, m, { value: todayTotals[m.key] || 0 }); });
   var missingToday = roster.filter(function (r) {
     return entryTotal(todayRows.filter(function (e) { return e.advisor_code === r.code; })[0]) === 0;
   });
   var loggedTodayCount = roster.length - missingToday.length;
-
+ 
   if (dbError) {
     return h("div", { style: { background: COLORS.parchment, minHeight: "100vh" }, className: "flex items-center justify-center px-6" },
       h("div", { style: { background: COLORS.card, borderColor: COLORS.line, color: COLORS.rust }, className: "max-w-sm rounded-2xl border p-5 text-sm" }, dbError)
@@ -251,23 +348,23 @@ function App() {
       h("div", { style: { color: COLORS.ink }, className: "text-sm tracking-widest uppercase font-mono" }, "Loading ledger…")
     );
   }
-
+ 
   var showOnboarding = !myIdentity || switching;
-
+ 
   var mainBody = null;
   if (!showOnboarding) {
     var tabsRow = h("div", { className: "flex mt-5 rounded-xl overflow-hidden border border-white/15" },
-      ["log", "team", "manager"].map(function (v) {
+      ["advisor", "manager"].map(function (v) {
         return h("button", {
           key: v,
           onClick: function () { v === "manager" ? (isManager ? setView("manager") : setShowManagerGate(true)) : setView(v); },
           className: "flex-1 py-2.5 text-sm font-medium",
-          style: { background: view === v ? COLORS.brass : "transparent", color: view === v ? COLORS.ink : "rgba(255,255,255,0.75)" }
-        }, v === "log" ? "Log Activity" : v === "team" ? "Team Board" : "Manager");
+          style: { background: view === v ? COLORS.brass : "transparent", color: view === v ? COLORS.parchment : "rgba(255,255,255,0.75)" }
+        }, v === "advisor" ? "Advisor view" : "Manager view");
       })
     );
-
-    var header = h("div", { style: { background: COLORS.ink }, className: "px-5 pt-6 pb-5 rounded-b-3xl" },
+ 
+    var header = h("div", { style: { background: COLORS.card }, className: "px-5 pt-6 pb-5 rounded-b-3xl" },
       h("div", { className: "flex items-center justify-between" },
         h("div", null,
           h("div", { style: { color: COLORS.brassLight }, className: "text-[11px] tracking-[0.2em] uppercase font-mono" }, "Field Log"),
@@ -277,25 +374,27 @@ function App() {
       ),
       tabsRow
     );
-
+ 
     mainBody = h("div", { className: "max-w-md mx-auto pb-10" },
       header,
-      view === "log" && h(LogView, {
+      view === "advisor" && h(AdvisorView, {
         date: today, entry: myTodayEntry, pulse: pulse, targets: targets, saveError: saveError,
-        onBump: bump, onToggleSocial: function () { upsertField({ social: !myTodayEntry.social }); }, onNote: function (note) { upsertField({ note: note }); }
-      }),
-      view === "team" && h(TeamView, {
-        date: today, todayTotals: todayTotals, socialToday: socialToday,
+        onBump: bump, onToggleSocial: function () { upsertField({ social: !myTodayEntry.social }); }, onNote: function (note) { upsertField({ note: note }); },
+        onFyp: function (val) { upsertField({ fyp: val }); },
+        todayTotals: todayTotals, socialToday: socialToday,
         teamCount: new Set(todayRows.map(function (e) { return e.advisor_code; })).size,
-        leaderboard: leaderboard, trendData: trendData, funnelData: funnelData, myCode: myCode, loading: teamLoading, onRefresh: loadTeamData
+        leaderboard: leaderboard, trendData: trendData, funnelData: funnelData, myCode: myCode, loading: teamLoading, onRefresh: loadTeamData,
+        myWeekDayLabels: myWeekDayLabels, monthBoards: monthBoards, myReferrals: myReferrals,
+        currentStreak: currentStreak, bestStreak: bestStreak
       }),
       view === "manager" && isManager && h(ManagerView, {
         date: today, roster: roster, teamEntries: teamEntries, loading: teamLoading, onRefresh: loadTeamData,
-        missingToday: missingToday, loggedTodayCount: loggedTodayCount, targets: targets, onSaveTargets: saveTargets
+        missingToday: missingToday, loggedTodayCount: loggedTodayCount, targets: targets, onSaveTargets: saveTargets,
+        todayRows: todayRows, monthBoards: monthBoards, referrals: referrals, onUpdateReferral: updateReferral
       })
     );
   }
-
+ 
   return h("div", { style: { background: COLORS.parchment, minHeight: "100vh" } },
     showOnboarding
       ? h(Onboarding, { roster: roster, onChoose: chooseAdvisor, onCreate: createAdvisor, cancelable: !!myIdentity, onCancel: function () { setSwitching(false); } })
@@ -303,7 +402,7 @@ function App() {
     showManagerGate && h(ManagerGate, { hasPin: hasManagerPin, onSubmit: unlockManager, onClose: function () { setShowManagerGate(false); } })
   );
 }
-
+ 
 function Onboarding(props) {
   var roster = props.roster, onChoose = props.onChoose, onCreate = props.onCreate, cancelable = props.cancelable, onCancel = props.onCancel;
   var modeState = useState("pick"); var mode = modeState[0], setMode = modeState[1];
@@ -312,7 +411,7 @@ function Onboarding(props) {
   var errorState = useState(""); var error = errorState[0], setError = errorState[1];
   var newNameState = useState(""); var newName = newNameState[0], setNewName = newNameState[1];
   var newCodeState = useState(""); var newCode = newCodeState[0], setNewCode = newCodeState[1];
-
+ 
   var submitPin = function () {
     if (pin.trim().toLowerCase() === target.code.trim().toLowerCase()) onChoose({ name: target.name, code: target.code });
     else { setError("That code doesn't match. Try again."); setPin(""); }
@@ -324,7 +423,7 @@ function Onboarding(props) {
     var res = await onCreate({ name: name, code: code });
     if (!res.ok) setError(res.message);
   };
-
+ 
   if (mode === "pin" && target) {
     return h("div", { className: "max-w-md mx-auto min-h-screen flex flex-col justify-center px-6 py-10" },
       h("div", { className: "text-center mb-8" },
@@ -338,7 +437,7 @@ function Onboarding(props) {
         className: "w-full px-4 py-3 rounded-2xl border outline-none focus:ring-2 text-center text-xl font-mono", placeholder: "Your code"
       }),
       error && h("div", { style: { color: COLORS.rust }, className: "text-xs text-center mt-2" }, error),
-      h("button", { onClick: submitPin, style: { background: COLORS.ink }, className: "w-full py-3 rounded-2xl text-white font-medium mt-4" }, "Unlock"),
+      h("button", { onClick: submitPin, style: { background: COLORS.emphasis }, className: "w-full py-3 rounded-2xl text-white font-medium mt-4" }, "Unlock"),
       h("button", { onClick: function () { setMode("pick"); }, style: { color: COLORS.slate }, className: "mt-4 text-sm text-center underline" }, "Back")
     );
   }
@@ -355,7 +454,7 @@ function Onboarding(props) {
           style: { borderColor: COLORS.line, background: COLORS.card, color: COLORS.ink }, className: "w-full px-4 py-3 rounded-2xl border outline-none focus:ring-2 font-mono" }),
         error && h("div", { style: { color: COLORS.rust }, className: "text-xs" }, error),
         h("div", { style: { color: COLORS.slate }, className: "text-[11px] leading-relaxed pt-1" }, "Your code is also your login from now on — keep it to yourself."),
-        h("button", { onClick: submitNew, style: { background: COLORS.ink }, className: "w-full py-3 rounded-2xl text-white font-medium mt-2" }, "Create my log")
+        h("button", { onClick: submitNew, style: { background: COLORS.emphasis }, className: "w-full py-3 rounded-2xl text-white font-medium mt-2" }, "Create my log")
       ),
       h("button", { onClick: function () { setError(""); setMode("pick"); }, style: { color: COLORS.slate }, className: "mt-6 text-sm text-center underline" }, "Back")
     );
@@ -379,7 +478,7 @@ function Onboarding(props) {
     cancelable && h("button", { onClick: onCancel, style: { color: COLORS.slate }, className: "mt-6 text-sm text-center underline" }, "Cancel")
   );
 }
-
+ 
 function ManagerGate(props) {
   var hasPin = props.hasPin, onSubmit = props.onSubmit, onClose = props.onClose;
   var pinState = useState(""); var pin = pinState[0], setPin = pinState[1];
@@ -395,7 +494,7 @@ function ManagerGate(props) {
       if (!ok) { setError("Incorrect PIN."); setPin(""); }
     }
   };
-  return h("div", { className: "fixed inset-0 flex items-center justify-center px-6", style: { background: "rgba(31,61,52,0.55)" } },
+  return h("div", { className: "fixed inset-0 flex items-center justify-center px-6", style: { background: "rgba(8,11,17,0.72)" } },
     h("div", { style: { background: COLORS.card }, className: "w-full max-w-sm rounded-3xl p-6 relative" },
       h("button", { onClick: onClose, className: "absolute top-4 right-4", style: { color: COLORS.slate } }, "✕"),
       h("div", { style: { color: COLORS.ink }, className: "font-display text-xl mb-1" }, hasPin ? "Manager access" : "Set up manager access"),
@@ -411,50 +510,11 @@ function ManagerGate(props) {
         className: "w-full px-4 py-3 rounded-2xl border outline-none focus:ring-2 text-center text-xl font-mono mb-2"
       }),
       error && h("div", { style: { color: COLORS.rust }, className: "text-xs mb-2" }, error),
-      h("button", { onClick: submit, style: { background: COLORS.ink }, className: "w-full py-3 rounded-2xl text-white font-medium mt-2" }, hasPin ? "Unlock" : "Set PIN & continue")
+      h("button", { onClick: submit, style: { background: COLORS.emphasis }, className: "w-full py-3 rounded-2xl text-white font-medium mt-2" }, hasPin ? "Unlock" : "Set PIN & continue")
     )
   );
 }
-
-function LogView(props) {
-  var date = props.date, entry = props.entry, pulse = props.pulse, targets = props.targets, onBump = props.onBump, onToggleSocial = props.onToggleSocial, onNote = props.onNote, saveError = props.saveError;
-  var totalToday = entryTotal(entry);
-  var showNudge = new Date().getHours() >= 15 && totalToday === 0;
-  return h("div", { className: "px-5 mt-6" },
-    h("div", { style: { color: COLORS.slate }, className: "text-xs font-mono uppercase tracking-wide mb-4" }, prettyDate(date)),
-    showNudge && h("div", { style: { background: "#FBEFE7", borderColor: COLORS.rust, color: COLORS.rust }, className: "rounded-2xl border p-3.5 text-xs mb-4" }, "Nothing logged today yet."),
-    saveError && h("div", { style: { background: "#FBEFE7", borderColor: COLORS.rust, color: COLORS.rust }, className: "rounded-2xl border p-3 text-xs mb-4" }, "Your last tap may not have saved — check your connection."),
-    h("div", { className: "space-y-3" },
-      METRICS.map(function (m) {
-        var val = entry[m.key] || 0, target = targets[m.key] || 0, met = target > 0 && val >= target;
-        return h("div", { key: m.key, style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4 flex items-center justify-between" },
-          h("div", null,
-            h("div", { style: { color: COLORS.ink }, className: "font-medium text-sm" }, m.label),
-            target > 0 && h("div", { style: { color: met ? COLORS.good : COLORS.slate }, className: "text-[10px] font-mono mt-0.5" }, "target " + target + (met ? " ✓" : ""))
-          ),
-          h("div", { className: "flex items-center gap-3" },
-            h("button", { onClick: function () { onBump(m.key, -1); }, style: { borderColor: COLORS.line, color: COLORS.slate }, className: "w-9 h-9 rounded-full border flex items-center justify-center active:scale-95" }, "–"),
-            h("div", { style: { color: COLORS.ink }, className: "font-mono text-xl w-7 text-center " + (pulse === m.key ? "pop" : "") }, val),
-            h("button", { onClick: function () { onBump(m.key, 1); }, style: { background: COLORS.brass }, className: "w-9 h-9 rounded-full text-white flex items-center justify-center active:scale-95" }, "+")
-          )
-        );
-      }),
-      h("button", { onClick: onToggleSocial, style: { background: entry.social ? COLORS.ink : COLORS.card, borderColor: entry.social ? COLORS.ink : COLORS.line }, className: "w-full rounded-2xl border p-4 flex items-center justify-between" },
-        h("div", { style: { color: entry.social ? "white" : COLORS.ink }, className: "font-medium text-sm" }, "Posted on social media today"),
-        h("div", { style: { borderColor: entry.social ? COLORS.brass : COLORS.line, background: entry.social ? COLORS.brass : "transparent" }, className: "w-6 h-6 rounded-md border-2" })
-      ),
-      h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4" },
-        h("div", { style: { color: COLORS.slate }, className: "text-xs font-mono uppercase tracking-wide mb-2" }, "Notes (optional)"),
-        h("textarea", {
-          defaultValue: entry.note || "", onBlur: function (ev) { onNote(ev.target.value); }, placeholder: "Who did you talk to?",
-          style: { borderColor: COLORS.line, background: COLORS.parchment, color: COLORS.ink }, className: "w-full px-3 py-2.5 rounded-xl border outline-none focus:ring-2 text-sm resize-none", rows: 2
-        })
-      )
-    ),
-    h("div", { style: { color: COLORS.slate }, className: "text-center text-xs mt-5 font-mono" }, "Every tap saves instantly.")
-  );
-}
-
+ 
 function TrendChart(props) {
   var data = props.data;
   var w = 320, ht = 160, pad = 24;
@@ -473,47 +533,249 @@ function TrendChart(props) {
     })
   );
 }
-
-function TeamView(props) {
-  var date = props.date, todayTotals = props.todayTotals, socialToday = props.socialToday, teamCount = props.teamCount,
-    leaderboard = props.leaderboard, trendData = props.trendData, funnelData = props.funnelData, myCode = props.myCode, loading = props.loading, onRefresh = props.onRefresh;
+ 
+function AdvisorView(props) {
+  var date = props.date, entry = props.entry, pulse = props.pulse, targets = props.targets, saveError = props.saveError,
+    onBump = props.onBump, onToggleSocial = props.onToggleSocial, onNote = props.onNote, onFyp = props.onFyp,
+    todayTotals = props.todayTotals, socialToday = props.socialToday, teamCount = props.teamCount,
+    leaderboard = props.leaderboard, trendData = props.trendData, funnelData = props.funnelData,
+    myCode = props.myCode, loading = props.loading, onRefresh = props.onRefresh,
+    myWeekDayLabels = props.myWeekDayLabels || [], monthBoards = props.monthBoards || { pipeline: [], grind: [], grosser: [] },
+    myReferrals = props.myReferrals || [], currentStreak = props.currentStreak || 0, bestStreak = props.bestStreak || 0;
+ 
   var maxFunnel = Math.max.apply(null, [1].concat(funnelData.map(function (f) { return f.value; })));
+  var myDaysLogged = myWeekDayLabels.length;
+  var totalToday = entryTotal(entry);
+  var showNudge = new Date().getHours() >= 15 && totalToday === 0;
+ 
+  var met = [(entry.prospecting || 0) >= 1, (entry.relationship || 0) >= 1, !!entry.social];
+  var progress = met.filter(Boolean).length;
+  var full = progress === 3;
+  var CIRC = 327;
+  var dashOffset = Math.round(CIRC - (CIRC * progress) / 3);
+  var earnedTotal = myReferrals.reduce(function (s, r) { return s + referralPayout(r); }, 0);
+ 
+  var referralOwed = myReferrals.reduce(function (s, r) {
+    var owed = 0;
+    if (r.contract_signed && !r.signed_paid) owed += 500;
+    if (r.apps_3 && !r.coded_paid) owed += 1000;
+    if (r.retained_90 && !r.retained_paid) owed += 1500;
+    return s + owed;
+  }, 0);
+  var laneStatus = LANES.map(function (lane) {
+    var rows = monthBoards[lane.key] || [];
+    var leader = rows.length ? rows[0] : null;
+    var leading = !!(leader && leader.code === myCode && leader[lane.key] > 0);
+    return { key: lane.key, label: lane.label, leading: leading, amount: LANE_AMOUNTS[lane.key] };
+  });
+  var projectedTotal = laneStatus.reduce(function (s, l) { return s + (l.leading ? l.amount : 0); }, 0);
+  var leadingLanes = laneStatus.filter(function (l) { return l.leading; });
+ 
   return h("div", { className: "px-5 mt-6 space-y-6" },
     h("div", { className: "flex items-center justify-between" },
-      h("div", { style: { color: COLORS.slate }, className: "text-xs font-mono uppercase tracking-wide" }, prettyDate(date) + " · " + teamCount + " logged in"),
-      h("button", { onClick: onRefresh, style: { color: COLORS.brass }, className: "text-xs font-mono" }, loading ? "…" : "refresh")
+      h("div", { style: { color: COLORS.slate }, className: "text-xs font-mono uppercase tracking-wide" }, prettyDate(date) + " \u00b7 " + teamCount + " logged in"),
+      h("button", { onClick: onRefresh, style: { color: COLORS.brass }, className: "text-xs font-mono" }, loading ? "\u2026" : "refresh")
     ),
-    h("div", { className: "grid grid-cols-2 gap-3" },
-      METRICS.map(function (m) {
-        return h("div", { key: m.key, style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4" },
-          h("div", { style: { color: COLORS.ink }, className: "font-mono text-2xl" }, todayTotals[m.key] || 0),
-          h("div", { style: { color: COLORS.slate }, className: "text-[11px] mt-0.5" }, m.label)
-        );
-      })
+ 
+    h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4" },
+      h("div", { className: "flex items-start justify-between" },
+        h("div", null,
+          h("div", { style: { color: COLORS.slate }, className: "text-[11px] uppercase tracking-wide font-mono" }, "Incentive receivable"),
+          h("div", { style: { color: COLORS.brass }, className: "font-display text-3xl mt-1" }, fmtPhp(referralOwed))
+        ),
+        h("div", { style: { color: COLORS.slate }, className: "text-[10px] text-right leading-relaxed max-w-[110px]" }, "confirmed \u2014 earned, not yet paid out")
+      ),
+      projectedTotal > 0 && h("div", { style: { borderColor: COLORS.line }, className: "border-t mt-3 pt-3" },
+        h("div", { className: "flex items-center justify-between" },
+          h("div", { style: { color: COLORS.ink }, className: "text-sm font-medium" }, "+ " + fmtPhp(projectedTotal) + " projected"),
+          h("div", { style: { color: COLORS.slate }, className: "text-[10px]" }, "if leads hold to month end")
+        ),
+        h("div", { style: { color: COLORS.slate }, className: "text-[11px] mt-1" }, "Leading: " + leadingLanes.map(function (l) { return l.label; }).join(", "))
+      ),
+      referralOwed === 0 && projectedTotal === 0 && h("div", { style: { color: COLORS.slate }, className: "text-xs mt-2" }, "Nothing confirmed yet \u2014 keep logging and referring to build this up.")
     ),
-    h("div", { style: { background: COLORS.ink }, className: "rounded-2xl px-4 py-3 text-white text-sm" }, socialToday + " advisor" + (socialToday !== 1 ? "s" : "") + " posted on social media today"),
+ 
+    h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-5 flex items-center gap-5" },
+      h("div", { className: "relative shrink-0", style: { width: "108px", height: "108px" } },
+        h("svg", { width: "108", height: "108", viewBox: "0 0 120 120" },
+          h("circle", { cx: "60", cy: "60", r: "52", fill: "none", stroke: COLORS.parchment, strokeWidth: "10" }),
+          h("circle", {
+            cx: "60", cy: "60", r: "52", fill: "none", stroke: "url(#emberGrad)", strokeWidth: "10", strokeLinecap: "round",
+            strokeDasharray: CIRC, strokeDashoffset: dashOffset, transform: "rotate(-90 60 60)",
+            style: { transition: "stroke-dashoffset .35s ease" }
+          }),
+          h("defs", null,
+            h("linearGradient", { id: "emberGrad", x1: "0%", y1: "0%", x2: "100%", y2: "100%" },
+              h("stop", { offset: "0%", stopColor: COLORS.emphasis }),
+              h("stop", { offset: "100%", stopColor: COLORS.brass })
+            )
+          )
+        ),
+        h("div", { className: "absolute inset-0 flex flex-col items-center justify-center" },
+          h("span", { style: { color: COLORS.ink }, className: "font-display text-xl" }, progress + "/3"),
+          h("span", { style: { color: COLORS.slate }, className: "text-[9px] uppercase tracking-wider mt-0.5" }, "today")
+        )
+      ),
+      h("div", { className: "flex-1 min-w-0" },
+        h("div", { style: { color: COLORS.ink }, className: "font-display text-lg" }, full ? "Full funnel day" : "Building momentum"),
+        h("div", { style: { color: COLORS.slate }, className: "text-[11px] mt-1.5 space-y-0.5" },
+          h("div", null, (met[0] ? "\u2713" : "\u25cb") + " New prospect logged"),
+          h("div", null, (met[1] ? "\u2713" : "\u25cb") + " Relationship touch logged"),
+          h("div", null, (met[2] ? "\u2713" : "\u25cb") + " Social post marked")
+        ),
+        full && h("div", { style: { background: "rgba(255,106,61,0.16)", color: COLORS.emphasis }, className: "inline-block text-[10px] font-semibold px-2.5 py-1 rounded-lg mt-2" }, "Daily pacesetter")
+      )
+    ),
+ 
+    myReferrals.length > 0 && h("div", null,
+      h("div", { className: "flex items-baseline justify-between mb-2.5" },
+        h("span", { style: { color: COLORS.ink }, className: "font-display text-base" }, "Your growth investment"),
+        h("span", { style: { color: COLORS.brass }, className: "font-display text-xl" }, fmtPhp(earnedTotal))
+      ),
+      h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border divide-y", },
+        myReferrals.map(function (r) {
+          return h("div", { key: r.id, style: { borderColor: COLORS.line }, className: "px-4 py-3.5 flex items-center justify-between" },
+            h("div", null,
+              h("div", { style: { color: COLORS.ink }, className: "text-sm font-medium" }, r.candidate_name),
+              h("div", { style: { color: COLORS.slate }, className: "text-[11px] mt-0.5" }, r.stage)
+            ),
+            h("div", { style: { background: "rgba(242,183,5,0.14)", color: COLORS.brass }, className: "font-display text-lg px-3 py-1 rounded-xl" }, fmtPhp(referralPayout(r)))
+          );
+        })
+      )
+    ),
+ 
     h("div", null,
-      h(SectionTitle, { label: "Today's Funnel" }),
+      h(SectionTitle, { label: "This month \u2014 three lanes" }),
+      h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4 space-y-5" },
+        LANES.map(function (lane) {
+          var rows = monthBoards[lane.key] || [];
+          var leader = rows.length ? rows[0] : null;
+          var mine = rows.filter(function (r) { return r.code === myCode; })[0];
+          var mineVal = mine ? mine[lane.key] : 0;
+          var leaderVal = leader ? leader[lane.key] : 0;
+          var max = Math.max(leaderVal, 1);
+          var fmt = lane.key === "grosser" ? fmtPhp : function (v) { return v; };
+          var leading = !!(leader && leader.code === myCode && leaderVal > 0);
+          return h("div", { key: lane.key },
+            h("div", { className: "flex items-end justify-between mb-1" },
+              h("div", null,
+                h("div", { style: { color: COLORS.slate }, className: "text-[10px] uppercase tracking-wider font-mono" }, lane.label),
+                h("div", { style: { color: COLORS.ink }, className: "font-display text-2xl mt-0.5" }, fmt(mineVal))
+              ),
+              leading
+                ? h("span", { style: { background: "rgba(242,183,5,0.14)", color: COLORS.brass }, className: "text-[10px] font-semibold px-2 py-1 rounded-lg" }, "Leading")
+                : h("span", { style: { color: COLORS.slate }, className: "text-[11px] font-mono" }, "leader " + fmt(leaderVal))
+            ),
+            h("div", { style: { color: COLORS.slate }, className: "text-[10px] mb-1.5" }, lane.hint),
+            h("div", { style: { background: COLORS.parchment }, className: "h-2 rounded-full overflow-hidden" },
+              h("div", { style: { width: Math.min(100, (mineVal / max) * 100) + "%", background: COLORS.brass }, className: "h-full rounded-full" })
+            )
+          );
+        })
+      )
+    ),
+ 
+    h("div", null,
+      h(SectionTitle, { label: "Your Consistency" }),
+      h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4" },
+        h("div", { className: "flex items-center gap-2 mb-4" },
+          WEEKDAYS.map(function (d) {
+            var on = myWeekDayLabels.indexOf(d) !== -1;
+            return h("div", { key: d, style: { background: on ? COLORS.emphasis : COLORS.parchment, color: on ? "white" : COLORS.slate, borderColor: COLORS.line }, className: "flex-1 rounded-xl border py-2 text-center text-[11px] font-mono" }, d);
+          }),
+          h("div", { style: { color: currentStreak >= 5 ? COLORS.good : COLORS.slate }, className: "text-xs font-mono ml-1 whitespace-nowrap" }, currentStreak + "-day streak")
+        ),
+        h("div", { className: "grid grid-cols-3 gap-2" },
+          BADGE_LEVELS.map(function (n) {
+            var earned = bestStreak >= n;
+            var toGo = Math.max(0, n - currentStreak);
+            return h("div", { key: n, style: { background: earned ? "rgba(242,183,5,0.14)" : COLORS.parchment, borderColor: earned ? COLORS.brass : COLORS.line }, className: "rounded-xl border py-2.5 text-center" },
+              h("div", { style: { color: earned ? COLORS.brass : COLORS.ink }, className: "font-display text-sm" }, n + "-Day"),
+              h("div", { style: { color: earned ? COLORS.brass : COLORS.slate }, className: "text-[9px] mt-0.5" }, earned ? "Earned" : toGo + " to go")
+            );
+          })
+        )
+      )
+    ),
+ 
+    h("div", null,
+      h(SectionTitle, { label: "Log today's activity" }),
+      showNudge && h("div", { style: { background: "rgba(226,75,74,0.12)", borderColor: COLORS.rust, color: COLORS.rust }, className: "rounded-2xl border p-3.5 text-xs mb-3" }, "Nothing logged today yet."),
+      saveError && h("div", { style: { background: "rgba(226,75,74,0.12)", borderColor: COLORS.rust, color: COLORS.rust }, className: "rounded-2xl border p-3 text-xs mb-3" }, "Your last tap may not have saved \u2014 check your connection."),
+      h("div", { className: "space-y-3" },
+        METRICS.map(function (m) {
+          var val = entry[m.key] || 0, target = targets[m.key] || 0, hit = target > 0 && val >= target;
+          return h("div", { key: m.key, style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4 flex items-center justify-between" },
+            h("div", null,
+              h("div", { style: { color: COLORS.ink }, className: "font-medium text-sm" }, m.label),
+              target > 0 && h("div", { style: { color: hit ? COLORS.good : COLORS.slate }, className: "text-[10px] font-mono mt-0.5" }, "target " + target + (hit ? " \u2713" : ""))
+            ),
+            h("div", { className: "flex items-center gap-3" },
+              h("button", { onClick: function () { onBump(m.key, -1); }, style: { borderColor: COLORS.line, color: COLORS.slate }, className: "w-9 h-9 rounded-full border flex items-center justify-center active:scale-95" }, "\u2013"),
+              h("div", { style: { color: COLORS.ink }, className: "font-mono text-xl w-7 text-center " + (pulse === m.key ? "pop" : "") }, val),
+              h("button", { onClick: function () { onBump(m.key, 1); }, style: { background: COLORS.emphasis }, className: "w-9 h-9 rounded-full text-white flex items-center justify-center active:scale-95" }, "+")
+            )
+          );
+        }),
+        h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4" },
+          h("div", { style: { color: COLORS.ink }, className: "font-medium text-sm mb-2" }, "FYP settled today (\u20b1)"),
+          h("input", {
+            type: "number", min: 0, defaultValue: entry.fyp || 0, onBlur: function (ev) { onFyp(Math.max(0, parseInt(ev.target.value) || 0)); },
+            style: { borderColor: COLORS.line, background: COLORS.parchment, color: COLORS.ink }, className: "w-full px-3 py-2.5 rounded-xl border outline-none focus:ring-2 font-mono text-sm"
+          })
+        ),
+        h("button", { onClick: onToggleSocial, style: { background: entry.social ? COLORS.emphasis : COLORS.card, borderColor: entry.social ? COLORS.emphasis : COLORS.line }, className: "w-full rounded-2xl border p-4 flex items-center justify-between" },
+          h("div", { style: { color: entry.social ? "white" : COLORS.ink }, className: "font-medium text-sm" }, "Posted on social media today"),
+          h("div", { style: { borderColor: entry.social ? "white" : COLORS.line, background: entry.social ? "rgba(255,255,255,0.9)" : "transparent" }, className: "w-6 h-6 rounded-md border-2" })
+        ),
+        h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4" },
+          h("div", { style: { color: COLORS.slate }, className: "text-xs font-mono uppercase tracking-wide mb-2" }, "Notes (optional)"),
+          h("textarea", {
+            defaultValue: entry.note || "", onBlur: function (ev) { onNote(ev.target.value); }, placeholder: "Who did you talk to?",
+            style: { borderColor: COLORS.line, background: COLORS.parchment, color: COLORS.ink }, className: "w-full px-3 py-2.5 rounded-xl border outline-none focus:ring-2 text-sm resize-none", rows: 2
+          })
+        )
+      ),
+      h("div", { style: { color: COLORS.slate }, className: "text-center text-xs mt-4 font-mono" }, "Every tap saves instantly.")
+    ),
+ 
+    h("div", null,
+      h(SectionTitle, { label: "Team today" }),
+      h("div", { className: "grid grid-cols-2 gap-3" },
+        METRICS.map(function (m) {
+          return h("div", { key: m.key, style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4" },
+            h("div", { style: { color: COLORS.ink }, className: "font-mono text-2xl" }, todayTotals[m.key] || 0),
+            h("div", { style: { color: COLORS.slate }, className: "text-[11px] mt-0.5" }, m.label)
+          );
+        })
+      ),
+      h("div", { style: { background: COLORS.emphasis }, className: "rounded-2xl px-4 py-3 text-white text-sm mt-3" }, socialToday + " advisor" + (socialToday !== 1 ? "s" : "") + " posted on social media today")
+    ),
+ 
+    h("div", null,
+      h(SectionTitle, { label: "Today's funnel" }),
       h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4 space-y-2.5" },
         funnelData.map(function (f) {
           return h("div", { key: f.key, className: "flex items-center gap-3" },
             h("div", { style: { color: COLORS.slate }, className: "text-xs w-24 shrink-0" }, f.short),
             h("div", { style: { background: COLORS.parchment }, className: "flex-1 h-6 rounded-full overflow-hidden" },
-              h("div", { style: { width: ((f.value / maxFunnel) * 100) + "%", background: COLORS.brass, minWidth: f.value > 0 ? "8%" : "0%" }, className: "h-full rounded-full" })
+              h("div", { style: { width: (f.value / maxFunnel) * 100 + "%", background: COLORS.brass, minWidth: f.value > 0 ? "8%" : "0%" }, className: "h-full rounded-full" })
             ),
             h("div", { style: { color: COLORS.ink }, className: "font-mono text-sm w-6 text-right" }, f.value)
           );
         })
       )
     ),
+ 
     h("div", null,
-      h(SectionTitle, { label: "This Week's Leaderboard" }),
+      h(SectionTitle, { label: "This week's leaderboard" }),
       leaderboard.length === 0
         ? h("div", { style: { background: COLORS.card, borderColor: COLORS.line, color: COLORS.slate }, className: "rounded-2xl border p-5 text-sm text-center" }, "No activity logged yet this week.")
         : h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border divide-y" },
             leaderboard.map(function (row, i) {
-              return h("div", { key: row.code, style: { borderColor: COLORS.line, background: row.code === myCode ? COLORS.parchment : "transparent" }, className: "flex items-center gap-3 px-4 py-3" },
-                h("div", { style: { background: i === 0 ? COLORS.brass : COLORS.parchment, color: i === 0 ? "white" : COLORS.slate }, className: "font-mono text-xs w-6 h-6 rounded-full flex items-center justify-center shrink-0" }, i + 1),
+              return h("div", { key: row.code, style: { borderColor: COLORS.line, background: row.code === myCode ? "rgba(255,106,61,0.07)" : "transparent" }, className: "flex items-center gap-3 px-4 py-3" },
+                h("div", { style: { background: i === 0 ? COLORS.brass : COLORS.parchment, color: i === 0 ? COLORS.parchment : COLORS.slate }, className: "font-mono text-xs w-6 h-6 rounded-full flex items-center justify-center shrink-0" }, i + 1),
                 h("div", { style: { color: COLORS.ink }, className: "font-medium text-sm flex-1" }, row.name),
                 h("div", { className: "flex gap-3 font-mono text-xs", style: { color: COLORS.slate } },
                   h("span", null, (row.appts || 0) + " appt"),
@@ -523,8 +785,9 @@ function TeamView(props) {
             })
           )
     ),
+ 
     h("div", null,
-      h(SectionTitle, { label: "7-Day Trend — Team Totals" }),
+      h(SectionTitle, { label: "7-day trend \u2014 team totals" }),
       h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4" },
         h(TrendChart, { data: trendData }),
         h("div", { className: "flex flex-wrap gap-3 mt-2 justify-center" },
@@ -539,15 +802,17 @@ function TeamView(props) {
     )
   );
 }
-
+ 
 function ManagerView(props) {
   var date = props.date, roster = props.roster, teamEntries = props.teamEntries, loading = props.loading, onRefresh = props.onRefresh,
-    missingToday = props.missingToday, loggedTodayCount = props.loggedTodayCount, targets = props.targets, onSaveTargets = props.onSaveTargets;
+    missingToday = props.missingToday, loggedTodayCount = props.loggedTodayCount, targets = props.targets, onSaveTargets = props.onSaveTargets,
+    todayRows = props.todayRows || [], monthBoards = props.monthBoards || { pipeline: [], grind: [], grosser: [] }, referrals = props.referrals || [], onUpdateReferral = props.onUpdateReferral;
   var selectedState = useState(null); var selected = selectedState[0], setSelected = selectedState[1];
   var editState = useState(false); var editingTargets = editState[0], setEditingTargets = editState[1];
   var draftState = useState(targets); var draft = draftState[0], setDraft = draftState[1];
   var exportState = useState(false); var showExport = exportState[0], setShowExport = exportState[1];
-
+  var lbTabState = useState("pipeline"); var lbTab = lbTabState[0], setLbTab = lbTabState[1];
+ 
   var csv = useMemo(function () {
     var cutoff = todayStr(-59);
     var header = ["Advisor", "Code", "Date"].concat(METRICS.map(function (m) { return m.label; }), ["Social", "Note"]);
@@ -561,7 +826,7 @@ function ManagerView(props) {
     });
     return rows.map(function (r) { return r.join(","); }).join("\n");
   }, [teamEntries, roster]);
-
+ 
   var advisorRows = roster.map(function (r) {
     var todayEntry = teamEntries.filter(function (e) { return e.advisor_code === r.code && e.entry_date === date; })[0];
     var total = entryTotal(todayEntry);
@@ -591,15 +856,34 @@ function ManagerView(props) {
       )
     );
   });
-
+ 
   return h("div", { className: "px-5 mt-6 space-y-6" },
     h("div", { className: "flex items-center justify-between" },
       h("div", { style: { color: COLORS.slate }, className: "text-xs font-mono uppercase tracking-wide" }, "Manager view"),
       h("button", { onClick: onRefresh, style: { color: COLORS.brass }, className: "text-xs font-mono" }, loading ? "…" : "refresh")
     ),
-    h("div", { style: { background: COLORS.ink }, className: "rounded-2xl p-4 flex items-baseline justify-between" },
+    h("div", { style: { background: COLORS.emphasis }, className: "rounded-2xl p-4 flex items-baseline justify-between" },
       h("span", { className: "text-white font-display text-2xl" }, loggedTodayCount + "/" + roster.length),
       h("span", { style: { color: "rgba(255,255,255,0.6)" }, className: "text-xs" }, "logged something today")
+    ),
+    h("div", null,
+      h(SectionTitle, { label: "Today's Momentum" }),
+      h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border divide-y" },
+        roster.map(function (r) {
+          var e = todayRows.filter(function (x) { return x.advisor_code === r.code; })[0];
+          var full = isFullFunnel(e);
+          var lit = entryTotal(e) > 0;
+          var status = full ? "Full funnel" : lit ? "Logged" : "Not yet";
+          var dot = full ? COLORS.brass : lit ? COLORS.good : COLORS.line;
+          return h("div", { key: r.code, className: "px-4 py-3 flex items-center justify-between" },
+            h("div", { style: { color: COLORS.ink }, className: "text-sm font-medium" }, r.name),
+            h("div", { className: "flex items-center gap-2" },
+              h("span", { style: { background: dot }, className: "w-2.5 h-2.5 rounded-full" }),
+              h("span", { style: { color: COLORS.slate }, className: "text-[11px] font-mono" }, status)
+            )
+          );
+        })
+      )
     ),
     h("div", null,
       h(SectionTitle, { label: "Not Logged Today" }),
@@ -627,15 +911,73 @@ function ManagerView(props) {
               : h("span", { style: { color: COLORS.brass }, className: "font-mono text-sm font-semibold" }, targets[m.key] || 0)
           );
         }),
-        editingTargets && h("button", { onClick: function () { onSaveTargets(draft); setEditingTargets(false); }, style: { background: COLORS.ink }, className: "w-full py-2.5 rounded-xl text-white text-sm font-medium mt-2" }, "Save targets")
+        editingTargets && h("button", { onClick: function () { onSaveTargets(draft); setEditingTargets(false); }, style: { background: COLORS.emphasis }, className: "w-full py-2.5 rounded-xl text-white text-sm font-medium mt-2" }, "Save targets")
       )
+    ),
+    h("div", null,
+      h(SectionTitle, { label: "Monthly Leaderboard" }),
+      h("div", { className: "flex gap-2 mb-2.5" },
+        LANES.map(function (lane) {
+          return h("button", {
+            key: lane.key, onClick: function () { setLbTab(lane.key); },
+            style: { background: lbTab === lane.key ? COLORS.brass : COLORS.card, color: lbTab === lane.key ? "white" : COLORS.slate, borderColor: COLORS.line },
+            className: "px-3 py-1.5 rounded-full border text-xs font-medium"
+          }, lane.label);
+        })
+      ),
+      h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border divide-y" },
+        (monthBoards[lbTab] || []).length === 0
+          ? h("div", { style: { color: COLORS.slate }, className: "p-4 text-sm text-center" }, "No activity logged yet this month.")
+          : (monthBoards[lbTab] || []).map(function (row, i) {
+              var fmt = lbTab === "grosser" ? fmtPhp : function (v) { return v; };
+              return h("div", { key: row.code, className: "flex items-center gap-3 px-4 py-3" },
+                h("div", { style: { background: i === 0 ? COLORS.brass : COLORS.parchment, color: i === 0 ? "white" : COLORS.slate }, className: "font-mono text-xs w-6 h-6 rounded-full flex items-center justify-center shrink-0" }, i + 1),
+                h("div", { style: { color: COLORS.ink }, className: "font-medium text-sm flex-1" }, row.name),
+                h("div", { style: { color: COLORS.brass }, className: "font-mono text-xs font-semibold" }, fmt(row[lbTab]))
+              );
+            })
+      )
+    ),
+    h("div", null,
+      h(SectionTitle, { label: "Growth Investment Tracker" }),
+      referrals.length === 0
+        ? h("div", { style: { background: COLORS.card, borderColor: COLORS.line, color: COLORS.slate }, className: "rounded-2xl border p-5 text-sm text-center" }, "No referral candidates yet.")
+        : h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border divide-y" },
+            referrals.map(function (r) {
+              var recipient = roster.filter(function (a) { return a.code === r.recipient_code; })[0];
+              return h("div", { key: r.id, className: "px-4 py-3 space-y-2" },
+                h("div", { className: "flex items-center justify-between" },
+                  h("div", null,
+                    h("div", { style: { color: COLORS.ink }, className: "text-sm font-medium" }, r.candidate_name),
+                    h("div", { style: { color: COLORS.slate }, className: "text-[11px] mt-0.5" }, r.stage + (recipient ? " · " + recipient.name : ""))
+                  ),
+                  h("div", { style: { color: COLORS.brass }, className: "font-mono text-sm font-semibold" }, fmtPhp(referralPayout(r)))
+                ),
+                h("div", { className: "flex flex-wrap gap-4" },
+                  [
+                    { field: "signed_paid", label: "Signed \u20b1500", gate: r.contract_signed, gateLabel: "contract not signed yet" },
+                    { field: "coded_paid", label: "Coded \u20b11,000", gate: r.apps_3, gateLabel: "3 apps not submitted yet" },
+                    { field: "retained_paid", label: "Retained \u20b11,500", gate: r.retained_90, gateLabel: "not at 90 days yet" }
+                  ].map(function (m) {
+                    return h("label", { key: m.field, className: "flex items-center gap-1.5", title: m.gate ? "" : m.gateLabel },
+                      h("input", {
+                        type: "checkbox", checked: !!r[m.field], disabled: !m.gate,
+                        onChange: function (ev) { onUpdateReferral(r.id, m.field, ev.target.checked); }
+                      }),
+                      h("span", { style: { color: m.gate ? COLORS.ink : COLORS.slate }, className: "text-[11px]" }, m.label)
+                    );
+                  })
+                )
+              );
+            })
+          )
     ),
     h("div", null,
       h(SectionTitle, { label: "Advisors" }),
       h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border divide-y" }, advisorRows)
     ),
     h("button", { onClick: function () { setShowExport(true); }, style: { borderColor: COLORS.line, color: COLORS.ink }, className: "w-full py-3 rounded-2xl border font-medium text-sm" }, "Export last 60 days as CSV"),
-    showExport && h("div", { className: "fixed inset-0 flex items-center justify-center px-5", style: { background: "rgba(31,61,52,0.55)" } },
+    showExport && h("div", { className: "fixed inset-0 flex items-center justify-center px-5", style: { background: "rgba(8,11,17,0.72)" } },
       h("div", { style: { background: COLORS.card }, className: "w-full max-w-md rounded-3xl p-5 max-h-[80vh] flex flex-col" },
         h("div", { className: "flex items-center justify-between mb-3" },
           h("div", { style: { color: COLORS.ink }, className: "font-display text-lg" }, "Export CSV"),
@@ -645,18 +987,19 @@ function ManagerView(props) {
           readOnly: true, value: csv || "No data yet.", onFocus: function (ev) { ev.target.select(); },
           style: { borderColor: COLORS.line, background: COLORS.parchment, color: COLORS.ink }, className: "flex-1 w-full px-3 py-2.5 rounded-xl border outline-none text-[11px] font-mono resize-none", rows: 10
         }),
-        h("button", { onClick: function () { navigator.clipboard.writeText(csv).catch(function () {}); }, style: { background: COLORS.ink }, className: "w-full py-3 rounded-2xl text-white font-medium mt-3" }, "Copy to clipboard")
+        h("button", { onClick: function () { navigator.clipboard.writeText(csv).catch(function () {}); }, style: { background: COLORS.emphasis }, className: "w-full py-3 rounded-2xl text-white font-medium mt-3" }, "Copy to clipboard")
       )
     )
   );
 }
-
+ 
 function SectionTitle(props) {
   return h("div", { className: props.bare ? "" : "mb-2.5" }, h("span", { style: { color: COLORS.ink }, className: "font-display text-base" }, props.label));
 }
-
+ 
 ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 })();
 </script>
 </body>
 </html>
+ 

@@ -91,6 +91,19 @@ function weekdayLabel(dateStr) {
 function isFullFunnel(e) {
   return !!e && (e.prospecting || 0) >= 1 && (e.relationship || 0) >= 1 && !!e.social;
 }
+function referralStatus(r) {
+  if (r.retained_paid) return "Fully paid";
+  if (r.retained_90) return "Retained \u2014 90 day";
+  if (r.apps_3) return "Coded \u2014 3 apps";
+  if (r.contract_signed) return "Signed \u2014 contract";
+  return "Referred";
+}
+function daysSince(isoTimestamp) {
+  if (!isoTimestamp) return null;
+  var then = new Date(isoTimestamp); then.setHours(0, 0, 0, 0);
+  var now = new Date(); now.setHours(0, 0, 0, 0);
+  return Math.round((now - then) / 86400000);
+}
 function referralPayout(r) {
   return (r.signed_paid ? 500 : 0) + (r.coded_paid ? 1000 : 0) + (r.retained_paid ? 1500 : 0);
 }
@@ -715,10 +728,11 @@ function AdvisorView(props) {
       ),
       myReferrals.length > 0 && h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border divide-y", },
         myReferrals.map(function (r) {
+          var days = daysSince(r.created_at);
           return h("div", { key: r.id, style: { borderColor: COLORS.line }, className: "px-4 py-3.5 flex items-center justify-between" },
             h("div", null,
               h("div", { style: { color: COLORS.ink }, className: "text-sm font-medium" }, r.candidate_name),
-              h("div", { style: { color: COLORS.slate }, className: "text-[11px] mt-0.5" }, r.stage)
+              h("div", { style: { color: COLORS.slate }, className: "text-[11px] mt-0.5" }, referralStatus(r) + (days !== null ? " · day " + days : ""))
             ),
             h("div", { style: { background: "rgba(242,183,5,0.14)", color: COLORS.brass }, className: "font-display text-lg px-3 py-1 rounded-xl" }, fmtPhp(referralPayout(r)))
           );
@@ -1055,11 +1069,14 @@ function ManagerView(props) {
         : h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border divide-y" },
             referrals.map(function (r) {
               var recipient = roster.filter(function (a) { return a.code === r.recipient_code; })[0];
-              return h("div", { key: r.id, className: "px-4 py-3 space-y-2" },
+              var days = daysSince(r.created_at);
+              var needsReview = !r.retained_90 && days !== null && days >= 90;
+              return h("div", { key: r.id, style: { borderLeft: needsReview ? "3px solid " + COLORS.rust : "3px solid transparent" }, className: "px-4 py-3 space-y-2" },
                 h("div", { className: "flex items-center justify-between" },
                   h("div", null,
                     h("div", { style: { color: COLORS.ink }, className: "text-sm font-medium" }, r.candidate_name),
-                    h("div", { style: { color: COLORS.slate }, className: "text-[11px] mt-0.5" }, r.stage + (recipient ? " · " + recipient.name : ""))
+                    h("div", { style: { color: COLORS.slate }, className: "text-[11px] mt-0.5" }, referralStatus(r) + (recipient ? " · " + recipient.name : "") + (days !== null ? " · day " + days : "")),
+                    needsReview && h("div", { style: { color: COLORS.rust }, className: "text-[11px] font-medium mt-0.5" }, "90+ days \u2014 check retention")
                   ),
                   h("div", { style: { color: COLORS.brass }, className: "font-mono text-sm font-semibold" }, fmtPhp(referralPayout(r)))
                 ),

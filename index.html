@@ -615,13 +615,14 @@ function AdvisorView(props) {
   var newRefState = useState(""); var newRefName = newRefState[0], setNewRefName = newRefState[1];
   var refSavingState = useState(false); var refSaving = refSavingState[0], setRefSaving = refSavingState[1];
   var refMsgState = useState(""); var refMsg = refMsgState[0], setRefMsg = refMsgState[1];
+  var refOkState = useState(true); var refOk = refOkState[0], setRefOk = refOkState[1];
   var submitReferral = async function () {
-    if (!newRefName.trim()) { setRefMsg("Enter a name first."); return; }
+    if (!newRefName.trim()) { setRefOk(false); setRefMsg("Enter a name first."); return; }
     setRefSaving(true);
     var res = await onAddReferral(newRefName);
     setRefSaving(false);
-    if (res && res.ok) { setNewRefName(""); setRefMsg("Added \u2014 your manager will confirm progress from here."); }
-    else { setRefMsg((res && res.message) || "Couldn't save. Try again."); }
+    if (res && res.ok) { setNewRefName(""); setRefOk(true); setRefMsg("Added \u2014 your manager will confirm progress from here."); }
+    else { setRefOk(false); setRefMsg((res && res.message) || "Couldn't save \u2014 check your connection and try again."); }
   };
  
   var maxFunnel = Math.max.apply(null, [1].concat(funnelData.map(function (f) { return f.value; })));
@@ -724,7 +725,10 @@ function AdvisorView(props) {
           }),
           h("button", { onClick: submitReferral, disabled: refSaving, style: { background: COLORS.emphasis }, className: "px-4 rounded-xl text-white text-sm font-medium" }, refSaving ? "\u2026" : "Add")
         ),
-        refMsg && h("div", { style: { color: COLORS.slate }, className: "text-[11px] mt-2" }, refMsg)
+        refMsg && h("div", {
+          style: refOk ? { color: COLORS.good } : { background: "rgba(226,75,74,0.12)", borderColor: COLORS.rust, color: COLORS.rust },
+          className: refOk ? "text-[11px] mt-2" : "text-[11px] mt-2 rounded-lg border px-2.5 py-2 font-medium"
+        }, refMsg)
       ),
       myReferrals.length > 0 && h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border divide-y", },
         myReferrals.map(function (r) {

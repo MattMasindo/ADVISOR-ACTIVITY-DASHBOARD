@@ -730,17 +730,19 @@ function AdvisorView(props) {
           className: refOk ? "text-[11px] mt-2" : "text-[11px] mt-2 rounded-lg border px-2.5 py-2 font-medium"
         }, refMsg)
       ),
-      myReferrals.length > 0 && h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border divide-y", },
-        myReferrals.map(function (r) {
-          var days = daysSince(r.created_at);
-          return h("div", { key: r.id, style: { borderColor: COLORS.line }, className: "px-4 py-3.5 flex items-center justify-between" },
-            h("div", null,
-              h("div", { style: { color: COLORS.ink }, className: "text-sm font-medium" }, r.candidate_name),
-              h("div", { style: { color: COLORS.slate }, className: "text-[11px] mt-0.5" }, referralStatus(r) + (days !== null ? " · day " + days : ""))
-            ),
-            h("div", { style: { background: "rgba(242,183,5,0.14)", color: COLORS.brass }, className: "font-display text-lg px-3 py-1 rounded-xl" }, fmtPhp(referralPayout(r)))
-          );
-        })
+      myReferrals.length > 0 && h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border overflow-hidden" },
+        h("div", { style: { maxHeight: "360px", overflowY: "auto" }, className: "divide-y" },
+          myReferrals.slice().sort(function (a, b) { return daysSince(b.created_at) - daysSince(a.created_at); }).map(function (r) {
+            var days = daysSince(r.created_at);
+            return h("div", { key: r.id, style: { borderColor: COLORS.line }, className: "px-4 py-3.5 flex items-center justify-between" },
+              h("div", null,
+                h("div", { style: { color: COLORS.ink }, className: "text-sm font-medium" }, r.candidate_name),
+                h("div", { style: { color: COLORS.slate }, className: "text-[11px] mt-0.5" }, referralStatus(r) + (days !== null ? " · day " + days : ""))
+              ),
+              h("div", { style: { background: "rgba(242,183,5,0.14)", color: COLORS.brass }, className: "font-display text-lg px-3 py-1 rounded-xl" }, fmtPhp(referralPayout(r)))
+            );
+          })
+        )
       )
     ),
  
@@ -1080,10 +1082,20 @@ function ManagerView(props) {
           var recipient = roster.filter(function (a) { return a.code === r.recipient_code; })[0];
           return r.candidate_name.toLowerCase().indexOf(q) !== -1 || (recipient && recipient.name.toLowerCase().indexOf(q) !== -1);
         });
+        filtered = filtered.slice().sort(function (a, b) {
+          var aDays = daysSince(a.created_at), bDays = daysSince(b.created_at);
+          var aFlag = !a.retained_90 && aDays !== null && aDays >= 90;
+          var bFlag = !b.retained_90 && bDays !== null && bDays >= 90;
+          if (aFlag !== bFlag) return aFlag ? -1 : 1;
+          return (bDays || 0) - (aDays || 0);
+        });
         if (referrals.length === 0) return h("div", { style: { background: COLORS.card, borderColor: COLORS.line, color: COLORS.slate }, className: "rounded-2xl border p-5 text-sm text-center" }, "No referral candidates yet.");
         if (filtered.length === 0) return h("div", { style: { background: COLORS.card, borderColor: COLORS.line, color: COLORS.slate }, className: "rounded-2xl border p-5 text-sm text-center" }, "No match for \u201c" + search + "\u201d.");
-        return h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border divide-y" },
-            filtered.map(function (r) {
+        return h("div", null,
+          h("div", { style: { color: COLORS.slate }, className: "text-[11px] font-mono mb-1.5" }, filtered.length + (filtered.length === referrals.length ? " total" : " of " + referrals.length) + " \u00b7 newest / needs-review first"),
+          h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border overflow-hidden" },
+            h("div", { style: { maxHeight: "480px", overflowY: "auto" }, className: "divide-y" },
+              filtered.map(function (r) {
               var recipient = roster.filter(function (a) { return a.code === r.recipient_code; })[0];
               var days = daysSince(r.created_at);
               var needsReview = !r.retained_90 && days !== null && days >= 90;
@@ -1130,7 +1142,9 @@ function ManagerView(props) {
                 )
               );
             })
-          );
+            )
+          )
+        );
       })()
     ),
     h("div", null,

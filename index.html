@@ -408,8 +408,9 @@ function App() {
     );
   }
   if (loading) {
-    return h("div", { style: { background: COLORS.parchment, minHeight: "100vh" }, className: "flex items-center justify-center" },
-      h("div", { style: { color: COLORS.ink }, className: "text-sm tracking-widest uppercase font-mono" }, "Loading ledger…")
+    return h("div", { style: { background: COLORS.parchment, minHeight: "100vh" }, className: "flex flex-col items-center justify-center gap-4" },
+      h(BattleRiverMark, { size: 62, uid: "load" }),
+      h("div", { style: { color: COLORS.slate }, className: "text-[11px] tracking-widest uppercase font-mono" }, "Loading\u2026")
     );
   }
  
@@ -430,9 +431,12 @@ function App() {
  
     var header = h("div", { style: { background: COLORS.card }, className: "px-5 pt-6 pb-5 rounded-b-3xl" },
       h("div", { className: "flex items-center justify-between" },
-        h("div", null,
-          h("div", { style: { color: COLORS.brassLight }, className: "text-[11px] tracking-[0.2em] uppercase font-mono" }, "Field Log \u00b7 v2.5"),
-          h("div", { className: "font-display text-white text-2xl mt-0.5" }, myIdentity.name)
+        h("div", { className: "flex items-center gap-3" },
+          h(BattleRiverMark, { size: 34, uid: "hdr" }),
+          h("div", null,
+            h("div", { style: { color: COLORS.brassLight }, className: "text-[11px] tracking-[0.2em] uppercase font-mono" }, "Battle River \u00b7 v2.6"),
+            h("div", { className: "font-display text-white text-2xl mt-0.5" }, myIdentity.name)
+          )
         ),
         h("button", { onClick: function () { setSwitching(true); }, className: "text-white/70 hover:text-white text-xs font-mono" }, "switch")
       ),
@@ -527,8 +531,10 @@ function Onboarding(props) {
   }
   return h("div", { className: "max-w-md mx-auto min-h-screen flex flex-col justify-center px-6 py-10" },
     h("div", { className: "text-center mb-8" },
-      h("div", { style: { color: COLORS.brass }, className: "text-[11px] tracking-[0.25em] uppercase font-mono mb-2" }, "Advisor Activity Ledger"),
-      h("div", { style: { color: COLORS.ink }, className: "font-display text-3xl" }, "Who's logging in?")
+      h("div", { className: "flex justify-center mb-4" }, h(BattleRiverMark, { size: 74, uid: "login" })),
+      h("div", { style: { color: COLORS.ink }, className: "font-display text-2xl" }, "Battle River Unit"),
+      h("div", { style: { color: COLORS.brass }, className: "text-[10px] tracking-[0.22em] uppercase font-mono mt-1.5" }, "Flow with purpose \u00b7 Rise with power"),
+      h("div", { style: { color: COLORS.slate }, className: "text-sm mt-5" }, "Who's logging in?")
     ),
     roster.length > 0 && h("div", { className: "space-y-2 mb-6" },
       roster.map(function (r) {
@@ -600,6 +606,35 @@ function TrendChart(props) {
   );
 }
  
+function BattleRiverMark(props) {
+  var size = props.size || 32;
+  var uid = "brm-" + (props.uid || "a");
+  return h("svg", { width: size, height: size * 1.16, viewBox: "0 0 100 116", style: { flexShrink: 0 } },
+    h("defs", null,
+      h("clipPath", { id: uid },
+        h("path", { d: "M50 5 L91 21 V60 C91 87 71 103 50 111 C29 103 9 87 9 60 V21 Z" })
+      )
+    ),
+    h("g", { clipPath: "url(#" + uid + ")" },
+      h("rect", { x: "0", y: "0", width: "100", height: "116", fill: "#F2B705" }),
+      h("g", { stroke: "#FFF0C0", strokeWidth: "2.6", strokeLinecap: "round" },
+        [[50, 9, 50, 21], [31, 17, 38, 27], [69, 17, 62, 27], [17, 33, 29, 39], [83, 33, 71, 39], [21, 51, 31, 51], [79, 51, 69, 51]].map(function (l, i) {
+          return h("line", { key: i, x1: l[0], y1: l[1], x2: l[2], y2: l[3] });
+        })
+      ),
+      h("circle", { cx: "50", cy: "43", r: "13", fill: "#FFF0C0" }),
+      h("path", { d: "M9 78 L28 52 L42 68 L58 44 L76 68 L91 58 V116 H9 Z", fill: "#C9891B" }),
+      h("path", { d: "M9 84 L25 66 L39 78 L56 62 L74 80 L91 72 V116 H9 Z", fill: "#A96F12" }),
+      h("rect", { x: "0", y: "80", width: "100", height: "36", fill: "#12314E" }),
+      h("path", { d: "M50 68 C40 84 66 92 44 116", fill: "none", stroke: "#F7CB55", strokeWidth: "15", strokeLinecap: "round" }),
+      h("path", { d: "M50 68 C40 84 66 92 44 116", fill: "none", stroke: "#FFDF8A", strokeWidth: "5", strokeLinecap: "round", opacity: "0.55" })
+    ),
+    h("path", {
+      d: "M50 5 L91 21 V60 C91 87 71 103 50 111 C29 103 9 87 9 60 V21 Z",
+      fill: "none", stroke: "#12314E", strokeWidth: "7", strokeLinejoin: "round"
+    })
+  );
+}
 function MedalIcon(props) {
   var earned = props.earned;
   var face = earned ? COLORS.brass : COLORS.parchment;
@@ -1209,3 +1244,4 @@ ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 </script>
 </body>
 </html>
+ 

@@ -175,6 +175,38 @@ var LANES = [
 ];
 var LANE_AMOUNTS = { pipeline: 300, grind: 500, grosser: 700 };
  
+var RECRUITMENT_METRICS = [
+  { key: "leads_generated", label: "Leads Generated" },
+  { key: "interviews_booked", label: "Interviews Booked" },
+  { key: "interviews_attended", label: "Interviews Attended" },
+  { key: "interviews_noshow", label: "Interviews No-Show" }
+];
+function recruitmentKpiRow(scorecard, key) {
+  return (scorecard || []).filter(function (r) { return r.kpi_key === key; })[0];
+}
+function recruitmentWeightedScore(scorecard) {
+  return (scorecard || []).reduce(function (s, row) { return s + ((row.pct_of_target || 0) * (row.weight_pct || 0) / 100); }, 0);
+}
+function recruitmentTier(score) {
+  if (score >= 100) return { level: 5, label: "Outstanding" };
+  if (score >= 90) return { level: 4, label: "Exceeds Expectations" };
+  if (score >= 80) return { level: 3, label: "Meets Expectations" };
+  if (score >= 60) return { level: 2, label: "Needs Improvement" };
+  return { level: 1, label: "Unsatisfactory" };
+}
+function fmtKpiValue(row) {
+  if (!row) return "\u2014";
+  if (row.unit === "percent") return Math.round(row.actual_value || 0) + "%";
+  if (row.unit === "days") return Math.round(row.actual_value || 0) + "d";
+  return Math.round(row.actual_value || 0);
+}
+function fmtKpiTarget(row) {
+  if (!row) return "";
+  if (row.unit === "percent") return Math.round(row.target_value) + "%";
+  if (row.unit === "days") return Math.round(row.target_value) + "d+ before";
+  return Math.round(row.target_value) + "+";
+}
+ 
 function App() {
   var loadingState = useState(true); var loading = loadingState[0], setLoading = loadingState[1];
   var dbErrorState = useState(null); var dbError = dbErrorState[0], setDbError = dbErrorState[1];
@@ -192,6 +224,10 @@ function App() {
   var pulseState = useState(null); var pulse = pulseState[0], setPulse = pulseState[1];
   var showGateState = useState(false); var showManagerGate = showGateState[0], setShowManagerGate = showGateState[1];
   var saveErrorState = useState(false); var saveError = saveErrorState[0], setSaveError = saveErrorState[1];
+  var isRecruitmentState = useState(!!lget("is-recruitment")); var isRecruitment = isRecruitmentState[0], setIsRecruitment = isRecruitmentState[1];
+  var recruitmentState = useState({ scorecard: [], todayLog: null, forumEvents: [], loading: false });
+  var recruitment = recruitmentState[0], setRecruitment = recruitmentState[1];
+  var recruitmentPulseState = useState(null); var recruitmentPulse = recruitmentPulseState[0], setRecruitmentPulse = recruitmentPulseState[1];
  
   useEffect(function () {
     (async function () {
@@ -233,6 +269,24 @@ function App() {
     setTeamLoading(false);
   };
  
+  var loadRecruitmentData = async function () {
+    setRecruitment(function (prev) { return Object.assign({}, prev, { loading: true }); });
+    var monthStart = startOfMonth(today);
+    var endD = new Date(monthStart + "T00:00:00"); endD.setMonth(endD.getMonth() + 1); endD.setDate(endD.getDate() - 1);
+    var monthEnd = localDateStr(endD);
+    var results = await Promise.all([
+      sb.rpc("get_recruitment_scorecard", { p_month_start: monthStart, p_month_end: monthEnd }),
+      sb.from("aces_daily_log").select("*").eq("log_date", today).maybeSingle(),
+      sb.from("aces_forum_events").select("*").gte("event_date", monthStart).lte("event_date", monthEnd).order("event_date", { ascending: false })
+    ]);
+    setRecruitment({
+      loading: false,
+      scorecard: results[0].data || [],
+      todayLog: results[1].data || null,
+      forumEvents: results[2].data || []
+    });
+  };
+ 
   var updateReferral = async function (id, field, value) {
     var patch = {}; patch[field] = value;
     setReferrals(referrals.map(function (r) { return r.id === id ? Object.assign({}, r, patch) : r; }));
@@ -252,6 +306,10 @@ function App() {
   useEffect(function () {
     if (view === "advisor" || view === "manager") loadTeamData();
   }, [view]);
+ 
+  useEffect(function () {
+    if (isRecruitment || (view === "recruitment" && isManager)) loadRecruitmentData();
+  }, [isRecruitment, view, isManager]);
  
   var chooseAdvisor = async function (identity, asManager) {
     setMyIdentity(identity);
@@ -314,6 +372,37 @@ function App() {
     setMyEntries(newEntries);
     var res = await withRetry(function () { return sb.from("entries").upsert(updated, { onConflict: "advisor_code,entry_date" }); });
     setSaveError(!!(res && res.error));
+  };
+ 
+  var bumpRecruitment = async function (key, delta) {
+    var current = recruitment.todayLog || {};
+    var optimistic = Object.assign({}, current);
+    optimistic[key] = Math.max(0, (current[key] || 0) + delta);
+    setRecruitment(function (prev) { return Object.assign({}, prev, { todayLog: optimistic }); });
+    setRecruitmentPulse(key);
+    setTimeout(function () { setRecruitmentPulse(null); }, 500);
+    var payload = { p_log_date: today, p_leads_generated: 0, p_interviews_booked: 0, p_interviews_attended: 0, p_interviews_noshow: 0, p_notes: null };
+    payload["p_" + key] = delta;
+    var res = await withRetry(function () { return sb.rpc("upsert_aces_daily_log", payload); });
+    if (res && !res.error) await loadRecruitmentData();
+  };
+ 
+  var saveRecruitmentNote = async function (text) {
+    await withRetry(function () {
+      return sb.rpc("upsert_aces_daily_log", { p_log_date: today, p_leads_generated: 0, p_interviews_booked: 0, p_interviews_attended: 0, p_interviews_noshow: 0, p_notes: text });
+    });
+  };
+ 
+  var saveForumEvent = async function (info) {
+    var payload = {
+      event_date: info.event_date, registrants_count: info.registrants_count, attendees_count: info.attendees_count,
+      venue_confirmed_date: info.venue_confirmed_date, updated_at: new Date().toISOString()
+    };
+    var res = info.id
+      ? await sb.from("aces_forum_events").update(payload).eq("id", info.id)
+      : await sb.from("aces_forum_events").insert(payload);
+    if (res && !res.error) await loadRecruitmentData();
+    return !(res && res.error);
   };
  
   var saveTargets = async function (draft) {
@@ -418,11 +507,40 @@ function App() {
     );
   }
  
+  if (isRecruitment) {
+    var recHeader = h("div", { style: { background: COLORS.card }, className: "px-5 pt-6 pb-5 rounded-b-3xl" },
+      h("div", { className: "flex items-center justify-between" },
+        h("div", { className: "flex items-center gap-3" },
+          h(BattleRiverMark, { size: 34, uid: "aces" }),
+          h("div", null,
+            h("div", { style: { color: COLORS.brassLight }, className: "text-[11px] tracking-[0.2em] uppercase font-mono" }, "Battle River \u00b7 v2.8"),
+            h("div", { className: "font-display text-white text-2xl mt-0.5" }, "Recruitment")
+          )
+        ),
+        h("button", {
+          onClick: function () { setIsRecruitment(false); lset("is-recruitment", false); setSwitching(true); },
+          className: "text-white/70 hover:text-white text-xs font-mono"
+        }, "switch")
+      )
+    );
+    return h("div", { style: { background: COLORS.parchment, minHeight: "100vh" } },
+      h("div", { className: "max-w-md mx-auto pb-10" },
+        recHeader,
+        h(RecruitmentView, {
+          readOnly: false, scorecard: recruitment.scorecard, todayLog: recruitment.todayLog, forumEvents: recruitment.forumEvents,
+          loading: recruitment.loading, pulse: recruitmentPulse,
+          onBumpDaily: bumpRecruitment, onSaveNote: saveRecruitmentNote, onSaveForumEvent: saveForumEvent, onRefresh: loadRecruitmentData
+        })
+      )
+    );
+  }
+ 
   var showOnboarding = !myIdentity || switching;
  
   var mainBody = null;
   if (!showOnboarding) {
-    var visibleTabs = isManager ? ["advisor", "manager"] : ["advisor"];
+    var visibleTabs = isManager ? ["advisor", "manager", "recruitment"] : ["advisor"];
+    var tabLabel = function (v) { return v === "advisor" ? "Advisor view" : v === "manager" ? "Manager view" : "Recruitment"; };
     var tabsRow = visibleTabs.length > 1 ? h("div", { className: "flex mt-5 rounded-xl overflow-hidden border border-white/15" },
       visibleTabs.map(function (v) {
         return h("button", {
@@ -430,7 +548,7 @@ function App() {
           onClick: function () { setView(v); },
           className: "flex-1 py-2.5 text-sm font-medium",
           style: { background: view === v ? COLORS.brass : "transparent", color: view === v ? COLORS.parchment : "rgba(255,255,255,0.75)" }
-        }, v === "advisor" ? "Advisor view" : "Manager view");
+        }, tabLabel(v));
       })
     ) : null;
  
@@ -439,7 +557,7 @@ function App() {
         h("div", { className: "flex items-center gap-3" },
           h(BattleRiverMark, { size: 34, uid: "hdr" }),
           h("div", null,
-            h("div", { style: { color: COLORS.brassLight }, className: "text-[11px] tracking-[0.2em] uppercase font-mono" }, "Battle River \u00b7 v2.7"),
+            h("div", { style: { color: COLORS.brassLight }, className: "text-[11px] tracking-[0.2em] uppercase font-mono" }, "Battle River \u00b7 v2.8"),
             h("div", { className: "font-display text-white text-2xl mt-0.5" }, myIdentity.name)
           )
         ),
@@ -466,20 +584,27 @@ function App() {
         todayRows: todayRows, monthBoards: monthBoards, referrals: referrals, onUpdateReferral: updateReferral,
         onDeleteReferral: deleteReferral,
         onSetAdvisorActive: setAdvisorActive
+      }),
+      view === "recruitment" && isManager && h(RecruitmentView, {
+        readOnly: true, scorecard: recruitment.scorecard, forumEvents: recruitment.forumEvents,
+        loading: recruitment.loading, onRefresh: loadRecruitmentData
       })
     );
   }
  
   return h("div", { style: { background: COLORS.parchment, minHeight: "100vh" } },
     showOnboarding
-      ? h(Onboarding, { roster: activeRoster, onChoose: chooseAdvisor, onCreate: createAdvisor, cancelable: !!myIdentity, onCancel: function () { setSwitching(false); } })
+      ? h(Onboarding, {
+          roster: activeRoster, onChoose: chooseAdvisor, onCreate: createAdvisor, cancelable: !!myIdentity, onCancel: function () { setSwitching(false); },
+          onEnterRecruitment: function () { setIsRecruitment(true); lset("is-recruitment", true); setSwitching(false); }
+        })
       : mainBody,
     showManagerGate && h(ManagerGate, { hasPin: hasManagerPin, onSubmit: unlockManager, onClose: function () { setShowManagerGate(false); } })
   );
 }
  
 function Onboarding(props) {
-  var roster = props.roster, onChoose = props.onChoose, onCreate = props.onCreate, cancelable = props.cancelable, onCancel = props.onCancel;
+  var roster = props.roster, onChoose = props.onChoose, onCreate = props.onCreate, cancelable = props.cancelable, onCancel = props.onCancel, onEnterRecruitment = props.onEnterRecruitment;
   var modeState = useState("role"); var mode = modeState[0], setMode = modeState[1];
   var roleState = useState("advisor"); var role = roleState[0], setRole = roleState[1];
   var targetState = useState(null); var target = targetState[0], setTarget = targetState[1];
@@ -523,6 +648,14 @@ function Onboarding(props) {
         },
           h("div", { style: { color: COLORS.ink }, className: "font-medium" }, "I'm the manager"),
           h("div", { style: { color: COLORS.slate }, className: "text-[11px] mt-0.5" }, "Requires the manager PIN after sign-in")
+        ),
+        h("button", {
+          onClick: function () { onEnterRecruitment(); },
+          style: { background: COLORS.card, borderColor: COLORS.line },
+          className: "w-full px-4 py-4 rounded-2xl border text-left"
+        },
+          h("div", { style: { color: COLORS.ink }, className: "font-medium" }, "I'm Recruitment (ACES)"),
+          h("div", { style: { color: COLORS.slate }, className: "text-[11px] mt-0.5" }, "Log leads, forum turnout, and interviews booked")
         )
       ),
       cancelable && h("button", { onClick: onCancel, style: { color: COLORS.slate }, className: "mt-6 text-sm text-center underline" }, "Cancel")
@@ -1266,6 +1399,165 @@ function ManagerView(props) {
         }),
         h("button", { onClick: function () { navigator.clipboard.writeText(csv).catch(function () {}); }, style: { background: COLORS.emphasis }, className: "w-full py-3 rounded-2xl text-white font-medium mt-3" }, "Copy to clipboard")
       )
+    )
+  );
+}
+ 
+function ForumEventCard(props) {
+  var event = props.event, onSave = props.onSave;
+  var dateState = useState(event ? event.event_date : todayStr()); var eventDate = dateState[0], setEventDate = dateState[1];
+  var regState = useState(event ? String(event.registrants_count || 0) : "0"); var registrants = regState[0], setRegistrants = regState[1];
+  var attState = useState(event ? String(event.attendees_count || 0) : "0"); var attendees = attState[0], setAttendees = attState[1];
+  var venueState = useState(event ? (event.venue_confirmed_date || "") : ""); var venueDate = venueState[0], setVenueDate = venueState[1];
+  var savingState = useState(false); var saving = savingState[0], setSaving = savingState[1];
+  var msgState = useState(""); var msg = msgState[0], setMsg = msgState[1];
+ 
+  var submit = async function () {
+    setSaving(true);
+    var ok = await onSave({
+      id: event ? event.id : undefined,
+      event_date: eventDate,
+      registrants_count: Math.max(0, parseInt(registrants) || 0),
+      attendees_count: Math.max(0, parseInt(attendees) || 0),
+      venue_confirmed_date: venueDate || null
+    });
+    setSaving(false);
+    setMsg(ok ? "Saved." : "Couldn't save \u2014 try again.");
+  };
+ 
+  return h("div", null,
+    h(SectionTitle, { label: "This Month's Forum / LBF" }),
+    h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4 space-y-2.5" },
+      h("div", null,
+        h("div", { style: { color: COLORS.slate }, className: "text-[10px] uppercase tracking-wide font-mono mb-1" }, "Event date"),
+        h("input", {
+          type: "date", value: eventDate, onChange: function (ev) { setEventDate(ev.target.value); },
+          style: { borderColor: COLORS.line, background: COLORS.parchment, color: COLORS.ink }, className: "w-full px-3 py-2.5 rounded-xl border outline-none focus:ring-2 text-sm font-mono"
+        })
+      ),
+      h("div", { className: "grid grid-cols-2 gap-2.5" },
+        h("div", null,
+          h("div", { style: { color: COLORS.slate }, className: "text-[10px] uppercase tracking-wide font-mono mb-1" }, "Registrants"),
+          h("input", {
+            type: "number", min: 0, value: registrants, onChange: function (ev) { setRegistrants(ev.target.value); },
+            style: { borderColor: COLORS.line, background: COLORS.parchment, color: COLORS.ink }, className: "w-full px-3 py-2.5 rounded-xl border outline-none focus:ring-2 text-sm font-mono"
+          })
+        ),
+        h("div", null,
+          h("div", { style: { color: COLORS.slate }, className: "text-[10px] uppercase tracking-wide font-mono mb-1" }, "Attended"),
+          h("input", {
+            type: "number", min: 0, value: attendees, onChange: function (ev) { setAttendees(ev.target.value); },
+            style: { borderColor: COLORS.line, background: COLORS.parchment, color: COLORS.ink }, className: "w-full px-3 py-2.5 rounded-xl border outline-none focus:ring-2 text-sm font-mono"
+          })
+        )
+      ),
+      h("div", null,
+        h("div", { style: { color: COLORS.slate }, className: "text-[10px] uppercase tracking-wide font-mono mb-1" }, "Venue confirmed on"),
+        h("input", {
+          type: "date", value: venueDate, onChange: function (ev) { setVenueDate(ev.target.value); },
+          style: { borderColor: COLORS.line, background: COLORS.parchment, color: COLORS.ink }, className: "w-full px-3 py-2.5 rounded-xl border outline-none focus:ring-2 text-sm font-mono"
+        })
+      ),
+      h("button", {
+        onClick: submit, disabled: saving, style: { background: COLORS.emphasis }, className: "w-full py-2.5 rounded-xl text-white text-sm font-medium"
+      }, saving ? "\u2026" : (event ? "Update event" : "Save event")),
+      msg && h("div", { style: { color: COLORS.slate }, className: "text-[11px] text-center" }, msg)
+    )
+  );
+}
+ 
+function RecruitmentView(props) {
+  var readOnly = !!props.readOnly, scorecard = props.scorecard || [], todayLog = props.todayLog, forumEvents = props.forumEvents || [],
+    loading = props.loading, pulse = props.pulse, onBumpDaily = props.onBumpDaily, onSaveNote = props.onSaveNote,
+    onSaveForumEvent = props.onSaveForumEvent, onRefresh = props.onRefresh;
+ 
+  var score = recruitmentWeightedScore(scorecard);
+  var tier = recruitmentTier(score);
+  var leadsRow = recruitmentKpiRow(scorecard, "sourcing_pipeline");
+  var interviewsRow = recruitmentKpiRow(scorecard, "conversion_efficiency");
+  var showUpRow = recruitmentKpiRow(scorecard, "attendance_quality");
+  var ratioFlag = !!(leadsRow && interviewsRow && leadsRow.actual_value >= leadsRow.target_value && interviewsRow.actual_value < interviewsRow.target_value);
+  var showUpFlag = !!(showUpRow && showUpRow.actual_value > 0 && showUpRow.actual_value < showUpRow.target_value);
+  var latestEvent = forumEvents.length ? forumEvents[0] : null;
+ 
+  return h("div", { className: "px-5 mt-6 space-y-6 pb-2" },
+    h("div", { className: "flex items-center justify-between" },
+      h("div", { style: { color: COLORS.slate }, className: "text-xs font-mono uppercase tracking-wide" }, "This month's scorecard"),
+      h("button", { onClick: onRefresh, style: { color: COLORS.brass }, className: "text-xs font-mono" }, loading ? "\u2026" : "refresh")
+    ),
+ 
+    !readOnly && h("div", null,
+      h(SectionTitle, { label: "Today" }),
+      h("div", { className: "space-y-3" },
+        RECRUITMENT_METRICS.map(function (m) {
+          var val = (todayLog && todayLog[m.key]) || 0;
+          return h("div", { key: m.key, style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4 flex items-center justify-between" },
+            h("div", { style: { color: COLORS.ink }, className: "font-medium text-sm" }, m.label),
+            h("div", { className: "flex items-center gap-3" },
+              h("button", { onClick: function () { onBumpDaily(m.key, -1); }, style: { borderColor: COLORS.line, color: COLORS.slate }, className: "w-9 h-9 rounded-full border flex items-center justify-center active:scale-95" }, "\u2013"),
+              h("div", { style: { color: COLORS.ink }, className: "font-mono text-xl w-7 text-center " + (pulse === m.key ? "pop" : "") }, val),
+              h("button", { onClick: function () { onBumpDaily(m.key, 1); }, style: { background: COLORS.emphasis }, className: "w-9 h-9 rounded-full text-white flex items-center justify-center active:scale-95" }, "+")
+            )
+          );
+        }),
+        h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4" },
+          h("div", { style: { color: COLORS.slate }, className: "text-xs font-mono uppercase tracking-wide mb-2" }, "Notes (optional)"),
+          h("textarea", {
+            defaultValue: (todayLog && todayLog.notes) || "", onBlur: function (ev) { onSaveNote(ev.target.value); }, placeholder: "Anything worth flagging today?",
+            style: { borderColor: COLORS.line, background: COLORS.parchment, color: COLORS.ink }, className: "w-full px-3 py-2.5 rounded-xl border outline-none focus:ring-2 text-sm resize-none", rows: 2
+          })
+        )
+      ),
+      h("div", { style: { color: COLORS.slate }, className: "text-center text-xs mt-3 font-mono" }, "Every tap saves instantly.")
+    ),
+ 
+    !readOnly && h(ForumEventCard, { event: latestEvent, onSave: onSaveForumEvent }),
+ 
+    readOnly && latestEvent && h("div", null,
+      h(SectionTitle, { label: "This Month's Forum / LBF" }),
+      h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4 text-sm" },
+        h("div", { style: { color: COLORS.ink } }, shortDate(latestEvent.event_date)),
+        h("div", { style: { color: COLORS.slate }, className: "text-[11px] mt-1" },
+          latestEvent.attendees_count + " / " + latestEvent.registrants_count + " attended" +
+          (latestEvent.venue_confirmed_date ? " \u00b7 venue confirmed " + shortDate(latestEvent.venue_confirmed_date) : "")
+        )
+      )
+    ),
+ 
+    (ratioFlag || showUpFlag) && h("div", { className: "space-y-2" },
+      ratioFlag && h("div", { style: { background: "rgba(226,75,74,0.12)", borderColor: COLORS.rust, color: COLORS.rust }, className: "rounded-2xl border p-3 text-xs" }, "Leads are on target but interviews booked are lagging \u2014 review the Facebook messaging script."),
+      showUpFlag && h("div", { style: { background: "rgba(226,75,74,0.12)", borderColor: COLORS.rust, color: COLORS.rust }, className: "rounded-2xl border p-3 text-xs" }, "Interview show-up rate is below target \u2014 send 24hr and 2hr reminders.")
+    ),
+ 
+    h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-5" },
+      h("div", { className: "flex items-start justify-between" },
+        h("div", null,
+          h("div", { style: { color: COLORS.slate }, className: "text-[11px] uppercase tracking-wide font-mono" }, "Weighted score"),
+          h("div", { style: { color: COLORS.brass }, className: "font-display text-3xl mt-1" }, Math.round(score) + "%")
+        ),
+        h("div", { style: { background: "rgba(242,183,5,0.14)", color: COLORS.brass }, className: "text-[11px] font-semibold px-2.5 py-1.5 rounded-lg text-right" }, tier.level + " \u2014 " + tier.label)
+      )
+    ),
+ 
+    h("div", null,
+      h(SectionTitle, { label: "5 KPIs" }),
+      scorecard.length === 0
+        ? h("div", { style: { background: COLORS.card, borderColor: COLORS.line, color: COLORS.slate }, className: "rounded-2xl border p-5 text-sm text-center" }, "No data yet this month.")
+        : h("div", { className: "space-y-3" },
+            scorecard.map(function (row) {
+              var pct = Math.min(row.pct_of_target || 0, 100);
+              return h("div", { key: row.kpi_key, style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4" },
+                h("div", { className: "flex items-baseline justify-between mb-1.5" },
+                  h("div", { style: { color: COLORS.ink }, className: "font-medium text-sm" }, row.label),
+                  h("div", { style: { color: COLORS.slate }, className: "text-[11px] font-mono" }, fmtKpiValue(row) + " / " + fmtKpiTarget(row))
+                ),
+                h("div", { style: { background: COLORS.parchment }, className: "h-2 rounded-full overflow-hidden" },
+                  h("div", { style: { width: pct + "%", background: (row.pct_of_target || 0) >= 100 ? COLORS.good : COLORS.brass }, className: "h-full rounded-full" })
+                ),
+                h("div", { style: { color: COLORS.slate }, className: "text-[10px] mt-1" }, Math.round(row.pct_of_target || 0) + "% of target \u00b7 " + row.weight_pct + "% weight")
+              );
+            })
+          )
     )
   );
 }

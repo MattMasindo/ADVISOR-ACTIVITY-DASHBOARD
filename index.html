@@ -253,10 +253,14 @@ function App() {
     if (view === "advisor" || view === "manager") loadTeamData();
   }, [view]);
  
-  var chooseAdvisor = async function (identity) {
+  var chooseAdvisor = async function (identity, asManager) {
     setMyIdentity(identity);
     lset("my-identity", identity);
     setSwitching(false);
+    setIsManager(false);
+    lset("is-manager", false);
+    setView("advisor");
+    if (asManager) setShowManagerGate(true);
     var res = await sb.from("entries").select("*").eq("advisor_code", identity.code);
     var map = {};
     (res.data || []).forEach(function (row) { map[row.entry_date] = row; });
@@ -418,23 +422,24 @@ function App() {
  
   var mainBody = null;
   if (!showOnboarding) {
-    var tabsRow = h("div", { className: "flex mt-5 rounded-xl overflow-hidden border border-white/15" },
-      ["advisor", "manager"].map(function (v) {
+    var visibleTabs = isManager ? ["advisor", "manager"] : ["advisor"];
+    var tabsRow = visibleTabs.length > 1 ? h("div", { className: "flex mt-5 rounded-xl overflow-hidden border border-white/15" },
+      visibleTabs.map(function (v) {
         return h("button", {
           key: v,
-          onClick: function () { v === "manager" ? (isManager ? setView("manager") : setShowManagerGate(true)) : setView(v); },
+          onClick: function () { setView(v); },
           className: "flex-1 py-2.5 text-sm font-medium",
           style: { background: view === v ? COLORS.brass : "transparent", color: view === v ? COLORS.parchment : "rgba(255,255,255,0.75)" }
         }, v === "advisor" ? "Advisor view" : "Manager view");
       })
-    );
+    ) : null;
  
     var header = h("div", { style: { background: COLORS.card }, className: "px-5 pt-6 pb-5 rounded-b-3xl" },
       h("div", { className: "flex items-center justify-between" },
         h("div", { className: "flex items-center gap-3" },
           h(BattleRiverMark, { size: 34, uid: "hdr" }),
           h("div", null,
-            h("div", { style: { color: COLORS.brassLight }, className: "text-[11px] tracking-[0.2em] uppercase font-mono" }, "Battle River \u00b7 v2.6"),
+            h("div", { style: { color: COLORS.brassLight }, className: "text-[11px] tracking-[0.2em] uppercase font-mono" }, "Battle River \u00b7 v2.7"),
             h("div", { className: "font-display text-white text-2xl mt-0.5" }, myIdentity.name)
           )
         ),
@@ -475,7 +480,8 @@ function App() {
  
 function Onboarding(props) {
   var roster = props.roster, onChoose = props.onChoose, onCreate = props.onCreate, cancelable = props.cancelable, onCancel = props.onCancel;
-  var modeState = useState("pick"); var mode = modeState[0], setMode = modeState[1];
+  var modeState = useState("role"); var mode = modeState[0], setMode = modeState[1];
+  var roleState = useState("advisor"); var role = roleState[0], setRole = roleState[1];
   var targetState = useState(null); var target = targetState[0], setTarget = targetState[1];
   var pinState = useState(""); var pin = pinState[0], setPin = pinState[1];
   var errorState = useState(""); var error = errorState[0], setError = errorState[1];
@@ -483,7 +489,7 @@ function Onboarding(props) {
   var newCodeState = useState(""); var newCode = newCodeState[0], setNewCode = newCodeState[1];
  
   var submitPin = function () {
-    if (pin.trim().toLowerCase() === target.code.trim().toLowerCase()) onChoose({ name: target.name, code: target.code });
+    if (pin.trim().toLowerCase() === target.code.trim().toLowerCase()) onChoose({ name: target.name, code: target.code }, role === "manager");
     else { setError("That code doesn't match. Try again."); setPin(""); }
   };
   var submitNew = async function () {
@@ -493,6 +499,35 @@ function Onboarding(props) {
     var res = await onCreate({ name: name, code: code });
     if (!res.ok) setError(res.message);
   };
+ 
+  if (mode === "role") {
+    return h("div", { className: "max-w-md mx-auto min-h-screen flex flex-col justify-center px-6 py-10" },
+      h("div", { className: "text-center mb-8" },
+        h("div", { className: "flex justify-center mb-4" }, h(BattleRiverMark, { size: 74, uid: "role" })),
+        h("div", { style: { color: COLORS.ink }, className: "font-display text-2xl" }, "Battle River Unit"),
+        h("div", { style: { color: COLORS.brass }, className: "text-[10px] tracking-[0.22em] uppercase font-mono mt-1.5" }, "Flow with purpose \u00b7 Rise with power")
+      ),
+      h("div", { className: "space-y-3" },
+        h("button", {
+          onClick: function () { setRole("advisor"); setError(""); setMode("pick"); },
+          style: { background: COLORS.card, borderColor: COLORS.line },
+          className: "w-full px-4 py-4 rounded-2xl border text-left"
+        },
+          h("div", { style: { color: COLORS.ink }, className: "font-medium" }, "I'm an advisor"),
+          h("div", { style: { color: COLORS.slate }, className: "text-[11px] mt-0.5" }, "Log your day and track your incentives")
+        ),
+        h("button", {
+          onClick: function () { setRole("manager"); setError(""); setMode("pick"); },
+          style: { background: COLORS.card, borderColor: COLORS.line },
+          className: "w-full px-4 py-4 rounded-2xl border text-left"
+        },
+          h("div", { style: { color: COLORS.ink }, className: "font-medium" }, "I'm the manager"),
+          h("div", { style: { color: COLORS.slate }, className: "text-[11px] mt-0.5" }, "Requires the manager PIN after sign-in")
+        )
+      ),
+      cancelable && h("button", { onClick: onCancel, style: { color: COLORS.slate }, className: "mt-6 text-sm text-center underline" }, "Cancel")
+    );
+  }
  
   if (mode === "pin" && target) {
     return h("div", { className: "max-w-md mx-auto min-h-screen flex flex-col justify-center px-6 py-10" },
@@ -531,10 +566,9 @@ function Onboarding(props) {
   }
   return h("div", { className: "max-w-md mx-auto min-h-screen flex flex-col justify-center px-6 py-10" },
     h("div", { className: "text-center mb-8" },
-      h("div", { className: "flex justify-center mb-4" }, h(BattleRiverMark, { size: 74, uid: "login" })),
-      h("div", { style: { color: COLORS.ink }, className: "font-display text-2xl" }, "Battle River Unit"),
-      h("div", { style: { color: COLORS.brass }, className: "text-[10px] tracking-[0.22em] uppercase font-mono mt-1.5" }, "Flow with purpose \u00b7 Rise with power"),
-      h("div", { style: { color: COLORS.slate }, className: "text-sm mt-5" }, "Who's logging in?")
+      h("div", { className: "flex justify-center mb-4" }, h(BattleRiverMark, { size: 56, uid: "login" })),
+      h("div", { style: { color: COLORS.brass }, className: "text-[10px] tracking-[0.22em] uppercase font-mono" }, role === "manager" ? "Manager sign-in" : "Advisor sign-in"),
+      h("div", { style: { color: COLORS.ink }, className: "font-display text-2xl mt-1.5" }, "Who's logging in?")
     ),
     roster.length > 0 && h("div", { className: "space-y-2 mb-6" },
       roster.map(function (r) {
@@ -547,7 +581,8 @@ function Onboarding(props) {
       })
     ),
     h("button", { onClick: function () { setError(""); setMode("new"); }, style: { borderColor: COLORS.line, color: COLORS.ink }, className: "w-full py-3.5 rounded-2xl border border-dashed font-medium text-sm" }, "+ I'm new here"),
-    cancelable && h("button", { onClick: onCancel, style: { color: COLORS.slate }, className: "mt-6 text-sm text-center underline" }, "Cancel")
+    h("button", { onClick: function () { setError(""); setMode("role"); }, style: { color: COLORS.slate }, className: "mt-5 text-sm text-center underline" }, "Back"),
+    cancelable && h("button", { onClick: onCancel, style: { color: COLORS.slate }, className: "mt-3 text-sm text-center underline" }, "Cancel")
   );
 }
  

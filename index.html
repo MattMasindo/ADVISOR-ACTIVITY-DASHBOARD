@@ -239,6 +239,16 @@ function App() {
     await sb.from("referrals").update(patch).eq("id", id);
   };
  
+  var deleteReferral = async function (id) {
+    var previous = referrals;
+    setReferrals(referrals.filter(function (r) { return r.id !== id; }));
+    var res = await sb.from("referrals").delete().eq("id", id);
+    if (res && res.error) {
+      setReferrals(previous);
+      window.alert("Couldn't remove that candidate — the database rejected it. Check that the delete policy has been added in Supabase.");
+    }
+  };
+ 
   useEffect(function () {
     if (view === "advisor" || view === "manager") loadTeamData();
   }, [view]);
@@ -421,7 +431,7 @@ function App() {
     var header = h("div", { style: { background: COLORS.card }, className: "px-5 pt-6 pb-5 rounded-b-3xl" },
       h("div", { className: "flex items-center justify-between" },
         h("div", null,
-          h("div", { style: { color: COLORS.brassLight }, className: "text-[11px] tracking-[0.2em] uppercase font-mono" }, "Field Log \u00b7 v2.4"),
+          h("div", { style: { color: COLORS.brassLight }, className: "text-[11px] tracking-[0.2em] uppercase font-mono" }, "Field Log \u00b7 v2.5"),
           h("div", { className: "font-display text-white text-2xl mt-0.5" }, myIdentity.name)
         ),
         h("button", { onClick: function () { setSwitching(true); }, className: "text-white/70 hover:text-white text-xs font-mono" }, "switch")
@@ -445,6 +455,7 @@ function App() {
         date: today, roster: roster, activeRoster: activeRoster, teamEntries: teamEntries, loading: teamLoading, onRefresh: loadTeamData,
         missingToday: missingToday, loggedTodayCount: loggedTodayCount, targets: targets, onSaveTargets: saveTargets,
         todayRows: todayRows, monthBoards: monthBoards, referrals: referrals, onUpdateReferral: updateReferral,
+        onDeleteReferral: deleteReferral,
         onSetAdvisorActive: setAdvisorActive
       })
     );
@@ -914,7 +925,7 @@ function ManagerView(props) {
   var date = props.date, roster = props.roster, activeRoster = props.activeRoster || props.roster, teamEntries = props.teamEntries, loading = props.loading, onRefresh = props.onRefresh,
     missingToday = props.missingToday, loggedTodayCount = props.loggedTodayCount, targets = props.targets, onSaveTargets = props.onSaveTargets,
     todayRows = props.todayRows || [], monthBoards = props.monthBoards || { pipeline: [], grind: [], grosser: [] }, referrals = props.referrals || [], onUpdateReferral = props.onUpdateReferral,
-    onSetAdvisorActive = props.onSetAdvisorActive;
+    onSetAdvisorActive = props.onSetAdvisorActive, onDeleteReferral = props.onDeleteReferral;
   var selectedState = useState(null); var selected = selectedState[0], setSelected = selectedState[1];
   var editState = useState(false); var editingTargets = editState[0], setEditingTargets = editState[1];
   var draftState = useState(targets); var draft = draftState[0], setDraft = draftState[1];
@@ -1149,7 +1160,18 @@ function ManagerView(props) {
                       h("span", { style: { color: m.gate ? COLORS.ink : COLORS.slate }, className: "text-[11px]" }, m.label)
                     );
                   })
-                )
+                ),
+                h("button", {
+                  onClick: function () {
+                    var paid = referralPayout(r);
+                    var msg = paid > 0
+                      ? "Remove " + r.candidate_name + "?\n\n" + fmtPhp(paid) + " has already been marked as paid out for this candidate. Removing them permanently erases that payout record. This cannot be undone."
+                      : "Remove " + r.candidate_name + " from the pipeline? This cannot be undone.";
+                    if (window.confirm(msg)) onDeleteReferral(r.id);
+                  },
+                  style: { color: COLORS.rust, borderColor: COLORS.line },
+                  className: "text-[11px] border rounded-lg px-2.5 py-1 mt-1"
+                }, "Remove candidate")
               );
             })
             )

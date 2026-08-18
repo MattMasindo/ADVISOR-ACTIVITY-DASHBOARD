@@ -421,7 +421,7 @@ function App() {
     var header = h("div", { style: { background: COLORS.card }, className: "px-5 pt-6 pb-5 rounded-b-3xl" },
       h("div", { className: "flex items-center justify-between" },
         h("div", null,
-          h("div", { style: { color: COLORS.brassLight }, className: "text-[11px] tracking-[0.2em] uppercase font-mono" }, "Field Log"),
+          h("div", { style: { color: COLORS.brassLight }, className: "text-[11px] tracking-[0.2em] uppercase font-mono" }, "Field Log \u00b7 v2.4"),
           h("div", { className: "font-display text-white text-2xl mt-0.5" }, myIdentity.name)
         ),
         h("button", { onClick: function () { setSwitching(true); }, className: "text-white/70 hover:text-white text-xs font-mono" }, "switch")
@@ -731,7 +731,12 @@ function AdvisorView(props) {
         }, refMsg)
       ),
       myReferrals.length > 0 && h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border overflow-hidden" },
-        h("div", { style: { maxHeight: "360px", overflowY: "auto" }, className: "divide-y" },
+        h("div", {
+          style: myReferrals.length > 4
+            ? { height: "340px", overflowY: "scroll", WebkitOverflowScrolling: "touch" }
+            : {},
+          className: "divide-y"
+        },
           myReferrals.slice().sort(function (a, b) { return daysSince(b.created_at) - daysSince(a.created_at); }).map(function (r) {
             var days = daysSince(r.created_at);
             return h("div", { key: r.id, style: { borderColor: COLORS.line }, className: "px-4 py-3.5 flex items-center justify-between" },
@@ -1094,7 +1099,12 @@ function ManagerView(props) {
         return h("div", null,
           h("div", { style: { color: COLORS.slate }, className: "text-[11px] font-mono mb-1.5" }, filtered.length + (filtered.length === referrals.length ? " total" : " of " + referrals.length) + " \u00b7 newest / needs-review first"),
           h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border overflow-hidden" },
-            h("div", { style: { maxHeight: "480px", overflowY: "auto" }, className: "divide-y" },
+            h("div", {
+              style: filtered.length > 4
+                ? { height: "460px", overflowY: "scroll", WebkitOverflowScrolling: "touch" }
+                : {},
+              className: "divide-y"
+            },
               filtered.map(function (r) {
               var recipient = roster.filter(function (a) { return a.code === r.recipient_code; })[0];
               var days = daysSince(r.created_at);

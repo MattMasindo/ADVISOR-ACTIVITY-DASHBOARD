@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#061A2E" />
 <title>Advisor Activity Ledger</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
@@ -11,7 +12,7 @@
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
-  body { font-family: 'Inter', sans-serif; background: #0F131B; }
+  body { font-family: 'Inter', sans-serif; background: #061A2E; }
   .font-display { font-family: 'Space Grotesk', sans-serif; }
   .font-mono { font-family: 'IBM Plex Mono', monospace; }
   @keyframes pop { 0% { transform: scale(1); } 40% { transform: scale(1.12); } 100% { transform: scale(1); } }
@@ -34,9 +35,9 @@ var useState = React.useState, useEffect = React.useEffect, useMemo = React.useM
 var sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
  
 var COLORS = {
-  ink: "#EDEFF5", inkLight: "#2DD4BF", parchment: "#0F131B", card: "#171D29",
-  brass: "#F2B705", brassLight: "#F7CB55", slate: "#8891A6", rust: "#E24B4A",
-  line: "#2A3244", good: "#2DD4BF", emphasis: "#FF6A3D"
+  ink: "#FFF0E0", inkLight: "#56B8C8", parchment: "#061A2E", card: "#0D2740",
+  brass: "#F0B040", brassLight: "#F5CE85", slate: "#8CA5BD", rust: "#E2603F",
+  line: "#1A3A58", good: "#4FB477", emphasis: "#E07B2C"
 };
  
 var METRICS = [
@@ -547,7 +548,7 @@ function App() {
           key: v,
           onClick: function () { setView(v); },
           className: "flex-1 py-2.5 text-sm font-medium",
-          style: { background: view === v ? COLORS.brass : "transparent", color: view === v ? COLORS.parchment : "rgba(255,255,255,0.75)" }
+          style: { background: view === v ? COLORS.brass : "transparent", color: view === v ? COLORS.parchment : "rgba(255,240,224,0.72)" }
         }, tabLabel(v));
       })
     ) : null;
@@ -734,7 +735,7 @@ function ManagerGate(props) {
       if (!ok) { setError("Incorrect PIN."); setPin(""); }
     }
   };
-  return h("div", { className: "fixed inset-0 flex items-center justify-center px-6", style: { background: "rgba(8,11,17,0.72)" } },
+  return h("div", { className: "fixed inset-0 flex items-center justify-center px-6", style: { background: "rgba(3,12,22,0.75)" } },
     h("div", { style: { background: COLORS.card }, className: "w-full max-w-sm rounded-3xl p-6 relative" },
       h("button", { onClick: onClose, className: "absolute top-4 right-4", style: { color: COLORS.slate } }, "✕"),
       h("div", { style: { color: COLORS.ink }, className: "font-display text-xl mb-1" }, hasPin ? "Manager access" : "Set up manager access"),
@@ -784,22 +785,22 @@ function BattleRiverMark(props) {
       )
     ),
     h("g", { clipPath: "url(#" + uid + ")" },
-      h("rect", { x: "0", y: "0", width: "100", height: "116", fill: "#F2B705" }),
-      h("g", { stroke: "#FFF0C0", strokeWidth: "2.6", strokeLinecap: "round" },
+      h("rect", { x: "0", y: "0", width: "100", height: "116", fill: "#F0B040" }),
+      h("g", { stroke: "#FFF0CC", strokeWidth: "2.6", strokeLinecap: "round" },
         [[50, 9, 50, 21], [31, 17, 38, 27], [69, 17, 62, 27], [17, 33, 29, 39], [83, 33, 71, 39], [21, 51, 31, 51], [79, 51, 69, 51]].map(function (l, i) {
           return h("line", { key: i, x1: l[0], y1: l[1], x2: l[2], y2: l[3] });
         })
       ),
-      h("circle", { cx: "50", cy: "43", r: "13", fill: "#FFF0C0" }),
-      h("path", { d: "M9 78 L28 52 L42 68 L58 44 L76 68 L91 58 V116 H9 Z", fill: "#C9891B" }),
-      h("path", { d: "M9 84 L25 66 L39 78 L56 62 L74 80 L91 72 V116 H9 Z", fill: "#A96F12" }),
-      h("rect", { x: "0", y: "80", width: "100", height: "36", fill: "#12314E" }),
-      h("path", { d: "M50 68 C40 84 66 92 44 116", fill: "none", stroke: "#F7CB55", strokeWidth: "15", strokeLinecap: "round" }),
-      h("path", { d: "M50 68 C40 84 66 92 44 116", fill: "none", stroke: "#FFDF8A", strokeWidth: "5", strokeLinecap: "round", opacity: "0.55" })
+      h("circle", { cx: "50", cy: "43", r: "13", fill: "#FFF0CC" }),
+      h("path", { d: "M9 78 L28 52 L42 68 L58 44 L76 68 L91 58 V116 H9 Z", fill: "#D08020" }),
+      h("path", { d: "M9 84 L25 66 L39 78 L56 62 L74 80 L91 72 V116 H9 Z", fill: "#B06010" }),
+      h("rect", { x: "0", y: "80", width: "100", height: "36", fill: "#002040" }),
+      h("path", { d: "M50 68 C40 84 66 92 44 116", fill: "none", stroke: "#F2C86E", strokeWidth: "15", strokeLinecap: "round" }),
+      h("path", { d: "M50 68 C40 84 66 92 44 116", fill: "none", stroke: "#FFF0CC", strokeWidth: "5", strokeLinecap: "round", opacity: "0.55" })
     ),
     h("path", {
       d: "M50 5 L91 21 V60 C91 87 71 103 50 111 C29 103 9 87 9 60 V21 Z",
-      fill: "none", stroke: "#12314E", strokeWidth: "7", strokeLinejoin: "round"
+      fill: "none", stroke: "#002040", strokeWidth: "7", strokeLinejoin: "round"
     })
   );
 }
@@ -919,7 +920,7 @@ function AdvisorView(props) {
           h("div", null, (met[1] ? "\u2713" : "\u25cb") + " Relationship touch logged"),
           h("div", null, (met[2] ? "\u2713" : "\u25cb") + " Social post marked")
         ),
-        full && h("div", { style: { background: "rgba(255,106,61,0.16)", color: COLORS.emphasis }, className: "inline-block text-[10px] font-semibold px-2.5 py-1 rounded-lg mt-2" }, "Daily pacesetter")
+        full && h("div", { style: { background: "rgba(224,123,44,0.18)", color: COLORS.emphasis }, className: "inline-block text-[10px] font-semibold px-2.5 py-1 rounded-lg mt-2" }, "Daily pacesetter")
       )
     ),
  
@@ -940,7 +941,7 @@ function AdvisorView(props) {
           h("button", { onClick: submitReferral, disabled: refSaving, style: { background: COLORS.emphasis }, className: "px-4 rounded-xl text-white text-sm font-medium" }, refSaving ? "\u2026" : "Add")
         ),
         refMsg && h("div", {
-          style: refOk ? { color: COLORS.good } : { background: "rgba(226,75,74,0.12)", borderColor: COLORS.rust, color: COLORS.rust },
+          style: refOk ? { color: COLORS.good } : { background: "rgba(226,96,63,0.14)", borderColor: COLORS.rust, color: COLORS.rust },
           className: refOk ? "text-[11px] mt-2" : "text-[11px] mt-2 rounded-lg border px-2.5 py-2 font-medium"
         }, refMsg)
       ),
@@ -958,7 +959,7 @@ function AdvisorView(props) {
                 h("div", { style: { color: COLORS.ink }, className: "text-sm font-medium" }, r.candidate_name),
                 h("div", { style: { color: COLORS.slate }, className: "text-[11px] mt-0.5" }, referralStatus(r) + (days !== null ? " · day " + days : ""))
               ),
-              h("div", { style: { background: "rgba(242,183,5,0.14)", color: COLORS.brass }, className: "font-display text-lg px-3 py-1 rounded-xl" }, fmtPhp(referralPayout(r)))
+              h("div", { style: { background: "rgba(240,176,64,0.16)", color: COLORS.brass }, className: "font-display text-lg px-3 py-1 rounded-xl" }, fmtPhp(referralPayout(r)))
             );
           })
         )
@@ -984,7 +985,7 @@ function AdvisorView(props) {
                 h("div", { style: { color: COLORS.ink }, className: "font-display text-2xl mt-0.5" }, fmt(mineVal))
               ),
               leading
-                ? h("span", { style: { background: "rgba(242,183,5,0.14)", color: COLORS.brass }, className: "text-[10px] font-semibold px-2 py-1 rounded-lg" }, "Leading")
+                ? h("span", { style: { background: "rgba(240,176,64,0.16)", color: COLORS.brass }, className: "text-[10px] font-semibold px-2 py-1 rounded-lg" }, "Leading")
                 : h("span", { style: { color: COLORS.slate }, className: "text-[11px] font-mono" }, "leader " + fmt(leaderVal))
             ),
             h("div", { style: { color: COLORS.slate }, className: "text-[10px] mb-1.5" }, lane.hint),
@@ -1010,7 +1011,7 @@ function AdvisorView(props) {
           BADGE_LEVELS.map(function (n) {
             var earned = bestStreak >= n;
             var toGo = Math.max(0, n - currentStreak);
-            return h("div", { key: n, style: { background: earned ? "rgba(242,183,5,0.14)" : COLORS.parchment, borderColor: earned ? COLORS.brass : COLORS.line }, className: "rounded-xl border py-2.5 text-center flex flex-col items-center gap-1" },
+            return h("div", { key: n, style: { background: earned ? "rgba(240,176,64,0.16)" : COLORS.parchment, borderColor: earned ? COLORS.brass : COLORS.line }, className: "rounded-xl border py-2.5 text-center flex flex-col items-center gap-1" },
               h(MedalIcon, { earned: earned }),
               h("div", { style: { color: earned ? COLORS.brass : COLORS.ink }, className: "font-display text-sm" }, n + "-Day"),
               h("div", { style: { color: earned ? COLORS.brass : COLORS.slate }, className: "text-[9px]" }, earned ? "Earned" : toGo + " to go")
@@ -1022,8 +1023,8 @@ function AdvisorView(props) {
  
     h("div", null,
       h(SectionTitle, { label: "Log today's activity" }),
-      showNudge && h("div", { style: { background: "rgba(226,75,74,0.12)", borderColor: COLORS.rust, color: COLORS.rust }, className: "rounded-2xl border p-3.5 text-xs mb-3" }, "Nothing logged today yet."),
-      saveError && h("div", { style: { background: "rgba(226,75,74,0.12)", borderColor: COLORS.rust, color: COLORS.rust }, className: "rounded-2xl border p-3 text-xs mb-3" }, "Your last tap may not have saved \u2014 check your connection."),
+      showNudge && h("div", { style: { background: "rgba(226,96,63,0.14)", borderColor: COLORS.rust, color: COLORS.rust }, className: "rounded-2xl border p-3.5 text-xs mb-3" }, "Nothing logged today yet."),
+      saveError && h("div", { style: { background: "rgba(226,96,63,0.14)", borderColor: COLORS.rust, color: COLORS.rust }, className: "rounded-2xl border p-3 text-xs mb-3" }, "Your last tap may not have saved \u2014 check your connection."),
       h("div", { className: "space-y-3" },
         METRICS.map(function (m) {
           var val = entry[m.key] || 0, target = targets[m.key] || 0, hit = target > 0 && val >= target;
@@ -1048,7 +1049,7 @@ function AdvisorView(props) {
         ),
         h("button", { onClick: onToggleSocial, style: { background: entry.social ? COLORS.emphasis : COLORS.card, borderColor: entry.social ? COLORS.emphasis : COLORS.line }, className: "w-full rounded-2xl border p-4 flex items-center justify-between" },
           h("div", { style: { color: entry.social ? "white" : COLORS.ink }, className: "font-medium text-sm" }, "Posted on social media today"),
-          h("div", { style: { borderColor: entry.social ? "white" : COLORS.line, background: entry.social ? "rgba(255,255,255,0.9)" : "transparent" }, className: "w-6 h-6 rounded-md border-2" })
+          h("div", { style: { borderColor: entry.social ? "white" : COLORS.line, background: entry.social ? "rgba(255,240,224,0.92)" : "transparent" }, className: "w-6 h-6 rounded-md border-2" })
         ),
         h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4" },
           h("div", { style: { color: COLORS.slate }, className: "text-xs font-mono uppercase tracking-wide mb-2" }, "Notes (optional)"),
@@ -1095,7 +1096,7 @@ function AdvisorView(props) {
         ? h("div", { style: { background: COLORS.card, borderColor: COLORS.line, color: COLORS.slate }, className: "rounded-2xl border p-5 text-sm text-center" }, "No activity logged yet this week.")
         : h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border divide-y" },
             leaderboard.map(function (row, i) {
-              return h("div", { key: row.code, style: { borderColor: COLORS.line, background: row.code === myCode ? "rgba(255,106,61,0.07)" : "transparent" }, className: "flex items-center gap-3 px-4 py-3" },
+              return h("div", { key: row.code, style: { borderColor: COLORS.line, background: row.code === myCode ? "rgba(224,123,44,0.10)" : "transparent" }, className: "flex items-center gap-3 px-4 py-3" },
                 h("div", { style: { background: i === 0 ? COLORS.brass : COLORS.parchment, color: i === 0 ? COLORS.parchment : COLORS.slate }, className: "font-mono text-xs w-6 h-6 rounded-full flex items-center justify-center shrink-0" }, i + 1),
                 h("div", { style: { color: COLORS.ink }, className: "font-medium text-sm flex-1" }, row.name),
                 h("div", { className: "flex gap-3 font-mono text-xs", style: { color: COLORS.slate } },
@@ -1195,7 +1196,7 @@ function ManagerView(props) {
     ),
     h("div", { style: { background: COLORS.emphasis }, className: "rounded-2xl p-4 flex items-baseline justify-between" },
       h("span", { className: "text-white font-display text-2xl" }, loggedTodayCount + "/" + roster.length),
-      h("span", { style: { color: "rgba(255,255,255,0.6)" }, className: "text-xs" }, "logged something today")
+      h("span", { style: { color: "rgba(255,240,224,0.6)" }, className: "text-xs" }, "logged something today")
     ),
     h("div", null,
       h(SectionTitle, { label: "Today's Momentum" }),
@@ -1251,7 +1252,7 @@ function ManagerView(props) {
         LANES.map(function (lane) {
           return h("button", {
             key: lane.key, onClick: function () { setLbTab(lane.key); },
-            style: { background: lbTab === lane.key ? COLORS.brass : COLORS.card, color: lbTab === lane.key ? "white" : COLORS.slate, borderColor: COLORS.line },
+            style: { background: lbTab === lane.key ? COLORS.brass : COLORS.card, color: lbTab === lane.key ? COLORS.parchment : COLORS.slate, borderColor: COLORS.line },
             className: "px-3 py-1.5 rounded-full border text-xs font-medium"
           }, lane.label);
         })
@@ -1262,7 +1263,7 @@ function ManagerView(props) {
           : (monthBoards[lbTab] || []).map(function (row, i) {
               var fmt = lbTab === "grosser" ? fmtPhp : function (v) { return v; };
               return h("div", { key: row.code, className: "flex items-center gap-3 px-4 py-3" },
-                h("div", { style: { background: i === 0 ? COLORS.brass : COLORS.parchment, color: i === 0 ? "white" : COLORS.slate }, className: "font-mono text-xs w-6 h-6 rounded-full flex items-center justify-center shrink-0" }, i + 1),
+                h("div", { style: { background: i === 0 ? COLORS.brass : COLORS.parchment, color: i === 0 ? COLORS.parchment : COLORS.slate }, className: "font-mono text-xs w-6 h-6 rounded-full flex items-center justify-center shrink-0" }, i + 1),
                 h("div", { style: { color: COLORS.ink }, className: "font-medium text-sm flex-1" }, row.name),
                 h("div", { style: { color: COLORS.brass }, className: "font-mono text-xs font-semibold" }, fmt(row[lbTab]))
               );
@@ -1387,7 +1388,7 @@ function ManagerView(props) {
       h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border divide-y" }, advisorRows)
     ),
     h("button", { onClick: function () { setShowExport(true); }, style: { borderColor: COLORS.line, color: COLORS.ink }, className: "w-full py-3 rounded-2xl border font-medium text-sm" }, "Export last 60 days as CSV"),
-    showExport && h("div", { className: "fixed inset-0 flex items-center justify-center px-5", style: { background: "rgba(8,11,17,0.72)" } },
+    showExport && h("div", { className: "fixed inset-0 flex items-center justify-center px-5", style: { background: "rgba(3,12,22,0.75)" } },
       h("div", { style: { background: COLORS.card }, className: "w-full max-w-md rounded-3xl p-5 max-h-[80vh] flex flex-col" },
         h("div", { className: "flex items-center justify-between mb-3" },
           h("div", { style: { color: COLORS.ink }, className: "font-display text-lg" }, "Export CSV"),
@@ -1525,8 +1526,8 @@ function RecruitmentView(props) {
     ),
  
     (ratioFlag || showUpFlag) && h("div", { className: "space-y-2" },
-      ratioFlag && h("div", { style: { background: "rgba(226,75,74,0.12)", borderColor: COLORS.rust, color: COLORS.rust }, className: "rounded-2xl border p-3 text-xs" }, "Leads are on target but interviews booked are lagging \u2014 review the Facebook messaging script."),
-      showUpFlag && h("div", { style: { background: "rgba(226,75,74,0.12)", borderColor: COLORS.rust, color: COLORS.rust }, className: "rounded-2xl border p-3 text-xs" }, "Interview show-up rate is below target \u2014 send 24hr and 2hr reminders.")
+      ratioFlag && h("div", { style: { background: "rgba(226,96,63,0.14)", borderColor: COLORS.rust, color: COLORS.rust }, className: "rounded-2xl border p-3 text-xs" }, "Leads are on target but interviews booked are lagging \u2014 review the Facebook messaging script."),
+      showUpFlag && h("div", { style: { background: "rgba(226,96,63,0.14)", borderColor: COLORS.rust, color: COLORS.rust }, className: "rounded-2xl border p-3 text-xs" }, "Interview show-up rate is below target \u2014 send 24hr and 2hr reminders.")
     ),
  
     h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-5" },
@@ -1535,7 +1536,7 @@ function RecruitmentView(props) {
           h("div", { style: { color: COLORS.slate }, className: "text-[11px] uppercase tracking-wide font-mono" }, "Weighted score"),
           h("div", { style: { color: COLORS.brass }, className: "font-display text-3xl mt-1" }, Math.round(score) + "%")
         ),
-        h("div", { style: { background: "rgba(242,183,5,0.14)", color: COLORS.brass }, className: "text-[11px] font-semibold px-2.5 py-1.5 rounded-lg text-right" }, tier.level + " \u2014 " + tier.label)
+        h("div", { style: { background: "rgba(240,176,64,0.16)", color: COLORS.brass }, className: "text-[11px] font-semibold px-2.5 py-1.5 rounded-lg text-right" }, tier.level + " \u2014 " + tier.label)
       )
     ),
  

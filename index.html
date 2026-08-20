@@ -107,22 +107,46 @@ function daysSince(isoTimestamp) {
 function referralPayout(r) {
   return (r.signed_paid ? 500 : 0) + (r.coded_paid ? 1000 : 0) + (r.retained_paid ? 1500 : 0);
 }
-function computeReceivable(code, referrals, monthBoards) {
-  var mine = referrals.filter(function (r) { return r.recipient_code === code; });
-  var confirmed = mine.reduce(function (s, r) {
-    var owed = 0;
-    if (r.contract_signed && !r.signed_paid) owed += 500;
-    if (r.apps_3 && !r.coded_paid) owed += 1000;
-    if (r.retained_90 && !r.retained_paid) owed += 1500;
-    return s + owed;
-  }, 0);
-  var projected = LANES.reduce(function (s, lane) {
+var LANE_MINIMUMS = { grind: 15 };
+
+function laneBasisText(laneKey, value) {
+  if (laneKey === "grosser") return fmtPhp(value) + " settled FYP";
+  if (laneKey === "pipeline") return value + " prospects + approaches";
+  if (laneKey === "grind") return value + " clients presented";
+  return String(value);
+}
+
+// Returns the itemised REASONS an advisor is owed money. computeReceivable
+// sums these, so the headline figure and the breakdown can never disagree.
+function receivableItems(code, referrals, monthBoards) {
+  var items = [];
+  referrals.filter(function (r) { return r.recipient_code === code; }).forEach(function (r) {
+    var who = r.candidate_name || "referral";
+    if (r.contract_signed && !r.signed_paid) items.push({ kind: "confirmed", amount: 500,  label: "Contract signed", detail: who });
+    if (r.apps_3 && !r.coded_paid)           items.push({ kind: "confirmed", amount: 1000, label: "3 apps / coded",   detail: who });
+    if (r.retained_90 && !r.retained_paid)   items.push({ kind: "confirmed", amount: 1500, label: "Retained 90 days", detail: who });
+  });
+  LANES.forEach(function (lane) {
     var rows = monthBoards[lane.key] || [];
     var leader = rows.length ? rows[0] : null;
-    var leading = !!(leader && leader.code === code && leader[lane.key] > 0);
-    return s + (leading ? LANE_AMOUNTS[lane.key] : 0);
-  }, 0);
-  return { confirmed: confirmed, projected: projected, total: confirmed + projected };
+    if (!leader || leader.code !== code || !(leader[lane.key] > 0)) return;
+    var min = LANE_MINIMUMS[lane.key];
+    items.push({
+      kind: "projected",
+      amount: LANE_AMOUNTS[lane.key],
+      label: "Leading " + lane.label,
+      detail: laneBasisText(lane.key, leader[lane.key]),
+      belowMin: min != null && leader[lane.key] < min ? min : null
+    });
+  });
+  return items;
+}
+
+function computeReceivable(code, referrals, monthBoards) {
+  var items = receivableItems(code, referrals, monthBoards);
+  var confirmed = items.reduce(function (s, i) { return s + (i.kind === "confirmed" ? i.amount : 0); }, 0);
+  var projected = items.reduce(function (s, i) { return s + (i.kind === "projected" ? i.amount : 0); }, 0);
+  return { confirmed: confirmed, projected: projected, total: confirmed + projected, items: items };
 }
 function fmtPhp(n) { return "\u20b1" + Math.round(n || 0).toLocaleString(); }
 function delay(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
@@ -1194,6 +1218,7 @@ function ManagerView(props) {
   var draftState = useState(targets); var draft = draftState[0], setDraft = draftState[1];
   var exportState = useState(false); var showExport = exportState[0], setShowExport = exportState[1];
   var lbTabState = useState("pipeline"); var lbTab = lbTabState[0], setLbTab = lbTabState[1];
+  var openRecState = useState(null); var openRec = openRecState[0], setOpenRec = openRecState[1];
   var searchState = useState(""); var search = searchState[0], setSearch = searchState[1];
  
   var csv = useMemo(function () {
@@ -1385,14 +1410,53 @@ function ManagerView(props) {
     ),
     h("div", null,
       h(SectionTitle, { label: "Incentive Receivable \u2014 Team" }),
+      h("div", { style: { color: COLORS.slate }, className: "text-[11px] leading-relaxed mb-2.5" },
+        "Tap an advisor to see exactly what they are owed for."),
       h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border divide-y" },
         activeRoster.map(function (r) {
           var rec = computeReceivable(r.code, referrals, monthBoards);
-          return h("div", { key: r.code, className: "flex items-center justify-between px-4 py-3" },
-            h("div", { style: { color: COLORS.ink }, className: "text-sm font-medium" }, r.name),
-            h("div", { className: "text-right" },
-              h("div", { style: { color: COLORS.brass }, className: "font-mono text-sm font-semibold" }, fmtPhp(rec.total)),
-              rec.projected > 0 && h("div", { style: { color: COLORS.slate }, className: "text-[10px]" }, fmtPhp(rec.confirmed) + " confirmed + " + fmtPhp(rec.projected) + " proj.")
+          var open = openRec === r.code;
+          return h("div", { key: r.code },
+            h("button", {
+              onClick: function () { setOpenRec(open ? null : r.code); },
+              className: "w-full flex items-center justify-between px-4 py-3 text-left"
+            },
+              h("div", { className: "flex items-center gap-2 min-w-0" },
+                h("span", { style: { color: COLORS.slate }, className: "text-[11px] font-mono shrink-0" }, open ? "\u25be" : "\u25b8"),
+                h("span", { style: { color: COLORS.ink }, className: "text-sm font-medium truncate" }, r.name)
+              ),
+              h("div", { className: "text-right shrink-0" },
+                h("div", { style: { color: COLORS.brass }, className: "font-mono text-sm font-semibold" }, fmtPhp(rec.total)),
+                rec.total > 0 && h("div", { style: { color: COLORS.slate }, className: "text-[10px]" },
+                  fmtPhp(rec.confirmed) + " confirmed + " + fmtPhp(rec.projected) + " proj.")
+              )
+            ),
+            open && h("div", { style: { background: COLORS.parchment }, className: "px-4 pb-3 pt-1" },
+              rec.items.length === 0
+                ? h("div", { style: { color: COLORS.slate }, className: "text-[12px] py-2" },
+                    "Nothing owed. Not leading any lane this month, and no referral milestones pending.")
+                : h("div", { className: "space-y-1.5 pt-1" },
+                    rec.items.map(function (it, idx) {
+                      return h("div", {
+                        key: idx,
+                        style: { borderColor: COLORS.line },
+                        className: "flex items-start justify-between gap-3 border rounded-xl px-3 py-2"
+                      },
+                        h("div", { className: "min-w-0" },
+                          h("div", { style: { color: COLORS.ink }, className: "text-[12px] font-medium" }, it.label),
+                          h("div", { style: { color: COLORS.slate }, className: "text-[10px] font-mono" }, it.detail),
+                          it.belowMin != null && h("div", { style: { color: COLORS.rust }, className: "text-[10px] mt-0.5" },
+                            "Below the stated minimum of " + it.belowMin)
+                        ),
+                        h("div", { className: "text-right shrink-0" },
+                          h("div", { style: { color: it.kind === "confirmed" ? COLORS.good : COLORS.brass }, className: "font-mono text-[12px] font-semibold" }, fmtPhp(it.amount)),
+                          h("div", { style: { color: COLORS.slate }, className: "text-[9px] font-mono uppercase tracking-wide" }, it.kind)
+                        )
+                      );
+                    })
+                  ),
+              h("div", { style: { color: COLORS.slate }, className: "text-[10px] leading-relaxed mt-2" },
+                "Confirmed = referral milestone already reached, not yet paid. Projected = currently leading that lane; can change until month end.")
             )
           );
         })

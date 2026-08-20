@@ -3,10 +3,6 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<meta name="theme-color" content="#061A2E" />
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTA4Ij4KICA8ZGVmcz4KICAgIDxjbGlwUGF0aCBpZD0iYyI+CiAgICAgIDxwYXRoIGQ9Ik01MCA4IEw4NiAyMCBWNTggQzg2IDgwIDY5IDk0IDUwIDEwMiBDMzEgOTQgMTQgODAgMTQgNTggVjIwIFoiLz4KICAgIDwvY2xpcFBhdGg+CiAgPC9kZWZzPgogIDxwYXRoIGQ9Ik01MCAyIEw5NCAxNiBWNTggQzk0IDg0IDc0IDEwMSA1MCAxMDggQzI2IDEwMSA2IDg0IDYgNTggVjE2IFoiIGZpbGw9IiMwMDIwNDAiLz4KICA8ZyBjbGlwLXBhdGg9InVybCgjYykiPgogICAgPHJlY3QgeD0iMTAiIHk9IjQiIHdpZHRoPSI4MCIgaGVpZ2h0PSIxMDQiIGZpbGw9IiNGMEIwNDAiLz4KICAgIDxjaXJjbGUgY3g9IjUwIiBjeT0iMzIiIHI9IjE2IiBmaWxsPSIjRkZGNkRDIi8+CiAgICA8cGF0aCBkPSJNMTAgNjAgUTI4IDM4IDQ0IDU0IFE1NiAzOCA3MCA1MiBRODIgNDQgOTAgNTggTDkwIDEwNCBMMTAgMTA0IFoiIGZpbGw9IiNDNDc2MUEiLz4KICAgIDxwYXRoIGQ9Ik0xMCA3NCBRMjYgNTggNDAgNzAgUTU0IDU2IDY2IDcwIFE4MCA2MiA5MCA3NiBMOTAgMTA0IEwxMCAxMDQgWiIgZmlsbD0iIzlFNTYwRSIvPgogICAgPHBhdGggZD0iTTY0IDEwNCBRNzAgODYgODQgNzYgUTg5IDcyIDkwIDcwIEw5MCAxMDQgWiIgZmlsbD0iIzAwMjA0MCIvPgogICAgPHBhdGggZD0iTTUwIDY2IEM1NiA3NiA0MiA4MiA0NiA5MCBDNDkgOTcgMzQgOTkgMzIgMTA0IEw2NiAxMDQgQzY0IDk2IDY4IDg2IDU5IDgwIEM1MiA3NCA1NyA3MCA1NCA2NiBaIiBmaWxsPSIjRkZGNkRDIi8+CiAgPC9nPgogIDxwYXRoIGQ9Ik01MCA4IEw4NiAyMCBWNTggQzg2IDgwIDY5IDk0IDUwIDEwMiBDMzEgOTQgMTQgODAgMTQgNTggVjIwIFoiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMjA0MCIgc3Ryb2tlLXdpZHRoPSI0LjUiLz4KPC9zdmc+Cg==" />
-<link rel="alternate icon" type="image/png" sizes="32x32" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAACslBMVEVMaXEAIEEAIEAAIEAAAFUAID8AAAAAHDgAID8AID8AHz8AID8AHz8AIEEAH0AAJEgAH0AAH0AAIEAAKlUAIEAAHz4AHkIAHz8AIEAAHz8AIEAAIEEAID8AHz8AHz8AH0AAHz8AHz8AID8AH0AAHkAAH0AAHkAAHz8AIEAAKj8AIEAAIEAAHEYAJzoAH0AAH0AAID8AJEgAGUwAHz4AIT4AHUEAH0AAID8AHz8AIkQAIEAAH0AAHz8AIz0AF0UAIT8AIT8AHz8AID8AIEDwsEAAIED/9tzEdhqeVg63jkAFI0Durz/526AKJT5nXUD747DPhSSgVw7EdxqtYhO+cxuaVRCXUxCrax8TLEDwsUL+89Y+U2Txs0bzv2EFJEDlozj0wmjepFPurj/rqjzJfR/5257lvYLTiSe7bhfGeRzJfR7ioULIex7jnzX30YrnpDjMo3DdlzDwsUHinTTopTn0w2nVjSnHehz56cngmjL525/+8tHwskPLoW7CdBqqYBLQqHmrYhKrbCqzZxTMom/36MqvZRS0aRXcu5HfwZi6bhehXBa6bRfnzqnHmmbDdhrDdRrYkSuoXxHDdhmqYBGLUBSZVBANJDwKJD7PpnYIIz4jLTUnLjONURO1aRbAchgHIz8GIz8hKzYeKzYrLzOqaiigWA6bVQ9MPSwBIUAIJD6QYCQBIECRXyRJOypcPyMKJT8UJzoTJzrDdRkFIj8EIj+kYBxaPyQMJTyfVw/57M4iLDWrhVv+9NkMKEKKTxQJJD8KJD2/jVShp6MEI0D0w2v0xG0DIT9lQyD+9dsCIkC1fD+dVg4BIT8OKED63qc4TmAVLUD63aVoXkBXVEApND2xdDXFxbkNKEH41JG4j0AGJED41ZKohUC6sp8NJ0LsrUAMJ0ELJ0EULEATK0BmXUAqphviAAAARHRSTlMAVva+A20CCfz9+PSZXqoH0qI/BuY5MljP6JYvzQhQ2khx3OtL6jsY3gzfbxINk7uVDgopTSOz9fAed/t4HQtVRJHt529hJ6sAAAAJcEhZcwAACxMAAAsTAQCanBgAAAIKSURBVHjadZPlUxxBEMUPuOPucIgrcXd3497MbI473CHu7u4kgSjE3QNxd3d3d0/+j+zs7gQ2t/tqqrqn3+9DV3W3xaKTNSrKajFVeI+eMUCvyO7djNxWbSI7AH2U175daEu92yQ0LBjojd9/JMn7C5+AoOaN6ws30Bbg4O7T11++Z+fkZLs/vnohf+EIsAUqgJ276V7J7cr4nElI5ocMl1vypnPGLgDIrqxnRNFLnrsllAZ4yXWXaLqjfH2BWAHEmgBxAogzAWYIYLAJMFkA/UwA0YTaghEwYcxMMm1I/75GwNiho6bGj3bNGjmcUho/cMDE8ZN0wCqqaMr0RCUOGkFpog6gBvoHWJ1Asq+fLI9LW55KQJooFy5dPkfN0oCy2rwrAke2r12dNIwW5CasXJCQR+maHacOAVU1IASeo4xr/lzGlixkbHFSMbuw/zgqa0Ad4MQ+pil/nhpTTgI1NMBeG6ePaf6yRSvU5NwZ1K0mlq4mDmzYptZnEzKOx3XnD8NWsu+14NmSwutnL8qz2MTY+j0bEV2mZKurBGPn3lQZuMmHdaUodesu+JcvvfcVHDh46Rpjj5RxXt69GQ4//WVU98f1G/cfv5XtB7euehDk9/9l1WuEe0/efCXk3fOHt9GgnO/tNW3hxDdkZeE9nM0aGh5v25DO+PkDzrDWpvfdsUtERKeuutpfn7jkZxMbi5oAAAAASUVORK5CYII=" />
-<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAMAAAAKE/YAAAADAFBMVEUAIEBaVkACIT8EI0L/9tyeVg5jcH7wsED/8ODEdhpKQDICIkCfVw4FIkD97t7/9ttISkChWQ+IcUA4QkDZokCPlZrfpkCYe0DDdRnwskJLXW8MKkh2gIrs4NTw49b67Nyho6UAID/Ev7qzaBTwsEE6UGQoQVn64Km/cRjIex1ca3r46tuxsa8/RkCmXBDVjSioXxH857pyRxsLKEeFTRbGeBsTL0xteYQGIj6pqqr75bcaNVCIj5ZDV2oKKUbloTbxtUwXKDn1xGz52Jjvrz7rqDu+i1IfOlS8ubbcpUDZ0MfNx8H97MYIJ0XUzMWPdkB+h48QLUq8bxcOJDvTiSe6bRb525+xZRPurT7blC31yXbl2tD0wWQVMUz968Pg1swjPVWATBfc1Mr+9NnAvLjo3dFlcn8sQ1vOpXNDNiqNUBObVQ+kWw/sqzz3z4XinjTLgCIhLDbKfR9pdoIqLjL/9NmAio/j2c6ZnKALJDxdQCJQPCemYh3LoG0xSF9GOCmrYRJ4hIpUZHWhXBbZkStQYnLyuVIMJDzz5tjzvl7QqHjxs0a2ahXzvFm0ejyjXxiNXiTdli/OgiL41ZJ4SRr86sD87s388te4bBbRysO9iE/Xz8YXM0/747LgmjH05tlvfIXOhCT4042tYhLgxJozMTA/VGdWZnaRUhL63aNSY3Pq5c/ppTksMzdyf4bQjz+coKH2y3vRqnvW08M1S2FMOSglMDmqYBGsbSrCdBnauIz258iJTxRVRS/ewJelp6f25cTo0Kvz4sL2zH/74q/88dXh182Xm5+jpabFl2FbbXju1q/+8tH67dFqRB43ODWFjJPyu1fNzL7wr0Dk38zu2rc8NSyYUxDVsYOrax/mzKZAPDN7Shm2t7HjyKBdbHrWsoTcvJG6hUrCkVq5cRypaCXcqmnIw73emTFvUSuuZBOVmZ3m4cznpDjYoVtyUSrhtXm5nHcSL0r64a2tby727tZ7akDj38tmdX7w3bxkX1dUTzuvcjNQSTfmt3NRQC1VkYxbAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAJoElEQVR42u2dd3jTRhjGReJguaSmaZsWh8QZdkhCIIMQSCCQDSlJKISQAWGvAmkgbDrYe4+yoUDZLbODTUsHndBCoYXu3dK993hqx8b2ne6kO1uKzzx6/0M5fffz8ek7Wb57xfE+KE6FVqFVaBVahVahVWgVWoVWoVVo9qD1A/U+Bq2Patuea9O8RbjPQMe3GNqHs6n7jIh5PgBtTG/elHNVccikMKahwyJC/DmhGkUH92YUul9wBxSxXVO6dWEOumtGNCelZqFRDEF37daMI1PntlF6BqDrihuN5CiEnEzFjUYeF0L3oTe3gIobjYpDIoz1Do0pbjTyoBByshc3O1LL31o2kgR3sxByShQ3v1tuvlWr1d52+003KlIIOdmLm53YJiJu6kLIyVvcAGIKbrpCyMlY3BDEFNwUhZCTq7hhiSm4SQshJ0txkyCm4CYqhJzHxY2MmIJbuhCKQodybhEb5j+bG7Op3aaY3Gfnm93jDnUfuqE7xDl7zmqcOrsnx+AGd0OFoJFZYThUpIFVdMhAnSeKQDdqeecdiJyt6qtBqSgH0faOO0XmefmhcVeeYWVjDVqNcw1016XM0JgxtigrWYNXchb6JMx4ywktVt3m9NWIqe8cmjooGzR+jOvGWZzZkthZ+JMF4y0bdAOxacOQrJFSO4NYgAZegM7VSGslY9BVjQmgG1cxBW1YpSHRKgNL0Ic0ZOrFELS5LyH0KjM70FUaUlWxA11GDF3GDvRqYujVzEAv1pDrAivQvSige7ECvZIC+iFWoPdQQJexAh1DAR3DCvRzFNDPqSPtAXSZL+b0Q75YPXyyTs+hgJ7DzL1HETFzETs3TLnE0LnsQM8nhp7P0NetZELmZJa+I+YQQuewBG1uR8TczszUc4/F4wmYxy9m7AlTDQF0DWuPxcw/S98rmVmD1i6USuvkhVrmoMWfqVsuwiwtg9DahWL31TELtUxCa801uBoyvsasZRRaq72wCaId9MoP3x04cKA08Wo+s9CWudH1ejz9+WidQ6OvVjAAXbE3c9SozL158DyzcpXtCfvqz1N1gFIr87wKXfFgomMQRydmQjBZOTW5Zf+N0QkUN8p70JmJ0BjGzbob/m9I1CGVWOEd6MytCJjURAD77tE6jMbsdbb6trJ064oVpZXW/ylFofNLMTRxVy86aPLH6LBKtadI/qw457mVFQpC5y1PxeNszSdgtmg54rPH/a0YdP4KUZq4TFtuiDPrdJV5swTHblAKelScBE2qdRDzVuikhIijFHSlTlqzLmpLde5IIeh/iTpPXK5jCfoGnZJSoVVoFfp6gh4LBHpHUeh3gL7Gug/dFgj0mqLQrwF9bXEfej8QaJ+i0PvkWiA7AQh0WFHow0Bf592H/hoIlK0odDbQ1wvuQ6cDgdKOKch8DFwEme4+9GBwLeVblBw9F5lMpkWxRI3fArsa7D70QDDSMgriWFNCYIBNgdPWNpFsv6yuh8hrXT3vPnQ4uAD0e2LkkiPXiG0KMklhfwn05K/3YCNDZyDUKccwLipPSggKqq4+Ur4WkeixRwIEqu4pDn0K6Km/J7svQhCFOra82pUmMGkROIpNym2jfLSTVUsdDbc1IS/TIZ5Ag9sv/D7V6XomBQpGMajcZbhjE+xHP1tjfTZ2xdksQeSS/NQP6Gm6J9BPQVdiSVIAUs6c7RnkOHjcCn3mPpdWsa6lxbQtKSEhaZotwZZxFBVPAhoqH/cGYJVQUsdicjn0T91jyE6un63ETmxKABJsLZTSEsVDahvURiBWLR46INBkofkKOHTaCn0X0MhKXTJNkGHVtUA/7T3bu/UwOAKtRagDph3bBh74yAr9KJhHscgMOwl2s8sz6BeI88M6jtC/F1ihF0DZjzzzCbCbg55B9wOjZQfQ6H5BeuCUTZXSklv7oO2p71JD30/Q8AGwk2G8h9DdwHhv0kBfIYV+E+xkgqfQ66DdOSMooN8WXohIjQBnFm6Dxzs/h4EBp5IzzzxjhT4u3XA4ZXZIQ2eAEdN2E0Ovr5tcXpFstzsN7CJYhj220H7VJ4ih37f9/PmZVDuo3vmHybCbuTk01CcJmX8ZZPsFVKrmnYQG+gNeBugN0Aa2HYTQ2+0/2567T7zdDih+V1n2jc+GorYiYl7i2Bi1XbRdKyj6w7ws0IVQ2OyRJNBPO38if0mk2WVoMuQKZdqh38EeL5Ki7K13XYqwnrjcSX1nIYd2PkmIJE2Qmc8ACyhekkgOx7dwLko2AwfoBpXrITkvLoCWfSwIRJfoHhzdTSkF9PMpUOxxEsxHz8Bra95G1ZCR46C4KRNltMo4D2/cnUpW7lz0BoJ6KpwcGbyM0OECA5V7RMsdah3TG0vhZvcIrGDCZTUlKRBsxm4lOYHDehK+i/aDgxbw8tq/jIU7mDwAn9GD0GvGPgFaDZgMh9zCywwdP4Wc+i7MQrcTrgkyYC4ccFi87EY7AwUOMHNbS0+GoFzunVrDxY5L6aKAO1CEwLCgB4b6HA76dBCemXuRV8KH6QNBP3OR33Nn4hdvfnztGpwMzbFSvxy6DR3eQWia8Srqwd4gLPSHthavpgki7YxXyPHKOExIjarXz2Ch/7TVZz+hWZdRMZuuiQjLq+HCG9XjeGMBS/0YOVwYZGM/XjlvscIUYYe1I4gmRJuWBIyoFYZoWsgr6eJW0FHY5VzB5HgCC/3JA8KywaUU8Mpaz0UhDLsi7x2JeFyK0pq//BDjHKW4X17hTwiLmVqwYn+IYX7scZQR2he88s6EhW0QPacBD4GfRF+FBxG5xfVZx9eHnWLXzigTonHOwZ6JnBIf24k0+NvA148HZBiye7/hl+3QjyKQf51QjDopeghfX26b4WORjk/ZtjLy8Roh83v9kWcMDa9Pi9BJaEe6cZbb1U5nhJkRgvb6yuDr14y1AO0H6bfjR4HlzqU/0J+w/WC+vh1kjbvQrmAdpz8CID8yvSO64ewwb3j1RqRgsLd840SegHGPLA7mvWMw3AWYKyJdsPdfqkP+fX9H5N857vGBvLdckfWTcC6c/i+/rnn9ZZx/ZNNgvTf9p4c0x/r09cf+JWQi72Wn78GkLt+OD/Me73178vjgNjRG38HxPBOe6pszSN2zU0KNPDPu9WGhxQTI/kOH8Ey9J6B3aHcpA+HpMiHL+XKDeZP6i3lMZxh5Jl8joU+PRk82XHS6nuEXdnQJFdpUb2y7jmf81Sj6ghmuE2GjDunhPvESGodltcVMegjvO6/7Mb44u83sp4y8+mIlFVqFVqFVaBVahVahVWgV+rqG/h9DYZ4jTevvjAAAAABJRU5ErkJggg==" />
 <title>Advisor Activity Ledger</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
@@ -15,7 +11,7 @@
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
-  body { font-family: 'Inter', sans-serif; background: #061A2E; }
+  body { font-family: 'Inter', sans-serif; background: #0F131B; }
   .font-display { font-family: 'Space Grotesk', sans-serif; }
   .font-mono { font-family: 'IBM Plex Mono', monospace; }
   @keyframes pop { 0% { transform: scale(1); } 40% { transform: scale(1.12); } 100% { transform: scale(1); } }
@@ -38,9 +34,9 @@ var useState = React.useState, useEffect = React.useEffect, useMemo = React.useM
 var sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
  
 var COLORS = {
-  ink: "#FFF0E0", inkLight: "#56B8C8", parchment: "#061A2E", card: "#0D2740",
-  brass: "#F0B040", brassLight: "#F5CE85", slate: "#8CA5BD", rust: "#E2603F",
-  line: "#1A3A58", good: "#4FB477", emphasis: "#E07B2C"
+  ink: "#EDEFF5", inkLight: "#2DD4BF", parchment: "#0F131B", card: "#171D29",
+  brass: "#F2B705", brassLight: "#F7CB55", slate: "#8891A6", rust: "#E24B4A",
+  line: "#2A3244", good: "#2DD4BF", emphasis: "#FF6A3D"
 };
  
 var METRICS = [
@@ -517,7 +513,7 @@ function App() {
         h("div", { className: "flex items-center gap-3" },
           h(BattleRiverMark, { size: 34, uid: "aces" }),
           h("div", null,
-            h("div", { style: { color: COLORS.brassLight }, className: "text-[11px] tracking-[0.2em] uppercase font-mono" }, "Battle River \u00b7 v2.8"),
+            h("div", { style: { color: COLORS.brassLight }, className: "text-[11px] tracking-[0.2em] uppercase font-mono" }, "Battle River \u00b7 v2.9"),
             h("div", { className: "font-display text-white text-2xl mt-0.5" }, "Recruitment")
           )
         ),
@@ -531,7 +527,7 @@ function App() {
       h("div", { className: "max-w-md mx-auto pb-10" },
         recHeader,
         h(RecruitmentView, {
-          readOnly: false, scorecard: recruitment.scorecard, todayLog: recruitment.todayLog, forumEvents: recruitment.forumEvents,
+          readOnly: false, today: today, scorecard: recruitment.scorecard, todayLog: recruitment.todayLog, forumEvents: recruitment.forumEvents,
           loading: recruitment.loading, pulse: recruitmentPulse,
           onBumpDaily: bumpRecruitment, onSaveNote: saveRecruitmentNote, onSaveForumEvent: saveForumEvent, onRefresh: loadRecruitmentData
         })
@@ -551,7 +547,7 @@ function App() {
           key: v,
           onClick: function () { setView(v); },
           className: "flex-1 py-2.5 text-sm font-medium",
-          style: { background: view === v ? COLORS.brass : "transparent", color: view === v ? COLORS.parchment : "rgba(255,240,224,0.72)" }
+          style: { background: view === v ? COLORS.brass : "transparent", color: view === v ? COLORS.parchment : "rgba(255,255,255,0.75)" }
         }, tabLabel(v));
       })
     ) : null;
@@ -561,7 +557,7 @@ function App() {
         h("div", { className: "flex items-center gap-3" },
           h(BattleRiverMark, { size: 34, uid: "hdr" }),
           h("div", null,
-            h("div", { style: { color: COLORS.brassLight }, className: "text-[11px] tracking-[0.2em] uppercase font-mono" }, "Battle River \u00b7 v2.8"),
+            h("div", { style: { color: COLORS.brassLight }, className: "text-[11px] tracking-[0.2em] uppercase font-mono" }, "Battle River \u00b7 v2.9"),
             h("div", { className: "font-display text-white text-2xl mt-0.5" }, myIdentity.name)
           )
         ),
@@ -590,7 +586,7 @@ function App() {
         onSetAdvisorActive: setAdvisorActive
       }),
       view === "recruitment" && isManager && h(RecruitmentView, {
-        readOnly: true, scorecard: recruitment.scorecard, forumEvents: recruitment.forumEvents,
+        readOnly: true, today: today, scorecard: recruitment.scorecard, forumEvents: recruitment.forumEvents,
         loading: recruitment.loading, onRefresh: loadRecruitmentData
       })
     );
@@ -738,7 +734,7 @@ function ManagerGate(props) {
       if (!ok) { setError("Incorrect PIN."); setPin(""); }
     }
   };
-  return h("div", { className: "fixed inset-0 flex items-center justify-center px-6", style: { background: "rgba(3,12,22,0.75)" } },
+  return h("div", { className: "fixed inset-0 flex items-center justify-center px-6", style: { background: "rgba(8,11,17,0.72)" } },
     h("div", { style: { background: COLORS.card }, className: "w-full max-w-sm rounded-3xl p-6 relative" },
       h("button", { onClick: onClose, className: "absolute top-4 right-4", style: { color: COLORS.slate } }, "✕"),
       h("div", { style: { color: COLORS.ink }, className: "font-display text-xl mb-1" }, hasPin ? "Manager access" : "Set up manager access"),
@@ -788,22 +784,22 @@ function BattleRiverMark(props) {
       )
     ),
     h("g", { clipPath: "url(#" + uid + ")" },
-      h("rect", { x: "0", y: "0", width: "100", height: "116", fill: "#F0B040" }),
-      h("g", { stroke: "#FFF0CC", strokeWidth: "2.6", strokeLinecap: "round" },
+      h("rect", { x: "0", y: "0", width: "100", height: "116", fill: "#F2B705" }),
+      h("g", { stroke: "#FFF0C0", strokeWidth: "2.6", strokeLinecap: "round" },
         [[50, 9, 50, 21], [31, 17, 38, 27], [69, 17, 62, 27], [17, 33, 29, 39], [83, 33, 71, 39], [21, 51, 31, 51], [79, 51, 69, 51]].map(function (l, i) {
           return h("line", { key: i, x1: l[0], y1: l[1], x2: l[2], y2: l[3] });
         })
       ),
-      h("circle", { cx: "50", cy: "43", r: "13", fill: "#FFF0CC" }),
-      h("path", { d: "M9 78 L28 52 L42 68 L58 44 L76 68 L91 58 V116 H9 Z", fill: "#D08020" }),
-      h("path", { d: "M9 84 L25 66 L39 78 L56 62 L74 80 L91 72 V116 H9 Z", fill: "#B06010" }),
-      h("rect", { x: "0", y: "80", width: "100", height: "36", fill: "#002040" }),
-      h("path", { d: "M50 68 C40 84 66 92 44 116", fill: "none", stroke: "#F2C86E", strokeWidth: "15", strokeLinecap: "round" }),
-      h("path", { d: "M50 68 C40 84 66 92 44 116", fill: "none", stroke: "#FFF0CC", strokeWidth: "5", strokeLinecap: "round", opacity: "0.55" })
+      h("circle", { cx: "50", cy: "43", r: "13", fill: "#FFF0C0" }),
+      h("path", { d: "M9 78 L28 52 L42 68 L58 44 L76 68 L91 58 V116 H9 Z", fill: "#C9891B" }),
+      h("path", { d: "M9 84 L25 66 L39 78 L56 62 L74 80 L91 72 V116 H9 Z", fill: "#A96F12" }),
+      h("rect", { x: "0", y: "80", width: "100", height: "36", fill: "#12314E" }),
+      h("path", { d: "M50 68 C40 84 66 92 44 116", fill: "none", stroke: "#F7CB55", strokeWidth: "15", strokeLinecap: "round" }),
+      h("path", { d: "M50 68 C40 84 66 92 44 116", fill: "none", stroke: "#FFDF8A", strokeWidth: "5", strokeLinecap: "round", opacity: "0.55" })
     ),
     h("path", {
       d: "M50 5 L91 21 V60 C91 87 71 103 50 111 C29 103 9 87 9 60 V21 Z",
-      fill: "none", stroke: "#002040", strokeWidth: "7", strokeLinejoin: "round"
+      fill: "none", stroke: "#12314E", strokeWidth: "7", strokeLinejoin: "round"
     })
   );
 }
@@ -923,7 +919,7 @@ function AdvisorView(props) {
           h("div", null, (met[1] ? "\u2713" : "\u25cb") + " Relationship touch logged"),
           h("div", null, (met[2] ? "\u2713" : "\u25cb") + " Social post marked")
         ),
-        full && h("div", { style: { background: "rgba(224,123,44,0.18)", color: COLORS.emphasis }, className: "inline-block text-[10px] font-semibold px-2.5 py-1 rounded-lg mt-2" }, "Daily pacesetter")
+        full && h("div", { style: { background: "rgba(255,106,61,0.16)", color: COLORS.emphasis }, className: "inline-block text-[10px] font-semibold px-2.5 py-1 rounded-lg mt-2" }, "Daily pacesetter")
       )
     ),
  
@@ -944,7 +940,7 @@ function AdvisorView(props) {
           h("button", { onClick: submitReferral, disabled: refSaving, style: { background: COLORS.emphasis }, className: "px-4 rounded-xl text-white text-sm font-medium" }, refSaving ? "\u2026" : "Add")
         ),
         refMsg && h("div", {
-          style: refOk ? { color: COLORS.good } : { background: "rgba(226,96,63,0.14)", borderColor: COLORS.rust, color: COLORS.rust },
+          style: refOk ? { color: COLORS.good } : { background: "rgba(226,75,74,0.12)", borderColor: COLORS.rust, color: COLORS.rust },
           className: refOk ? "text-[11px] mt-2" : "text-[11px] mt-2 rounded-lg border px-2.5 py-2 font-medium"
         }, refMsg)
       ),
@@ -962,7 +958,7 @@ function AdvisorView(props) {
                 h("div", { style: { color: COLORS.ink }, className: "text-sm font-medium" }, r.candidate_name),
                 h("div", { style: { color: COLORS.slate }, className: "text-[11px] mt-0.5" }, referralStatus(r) + (days !== null ? " · day " + days : ""))
               ),
-              h("div", { style: { background: "rgba(240,176,64,0.16)", color: COLORS.brass }, className: "font-display text-lg px-3 py-1 rounded-xl" }, fmtPhp(referralPayout(r)))
+              h("div", { style: { background: "rgba(242,183,5,0.14)", color: COLORS.brass }, className: "font-display text-lg px-3 py-1 rounded-xl" }, fmtPhp(referralPayout(r)))
             );
           })
         )
@@ -988,7 +984,7 @@ function AdvisorView(props) {
                 h("div", { style: { color: COLORS.ink }, className: "font-display text-2xl mt-0.5" }, fmt(mineVal))
               ),
               leading
-                ? h("span", { style: { background: "rgba(240,176,64,0.16)", color: COLORS.brass }, className: "text-[10px] font-semibold px-2 py-1 rounded-lg" }, "Leading")
+                ? h("span", { style: { background: "rgba(242,183,5,0.14)", color: COLORS.brass }, className: "text-[10px] font-semibold px-2 py-1 rounded-lg" }, "Leading")
                 : h("span", { style: { color: COLORS.slate }, className: "text-[11px] font-mono" }, "leader " + fmt(leaderVal))
             ),
             h("div", { style: { color: COLORS.slate }, className: "text-[10px] mb-1.5" }, lane.hint),
@@ -1014,7 +1010,7 @@ function AdvisorView(props) {
           BADGE_LEVELS.map(function (n) {
             var earned = bestStreak >= n;
             var toGo = Math.max(0, n - currentStreak);
-            return h("div", { key: n, style: { background: earned ? "rgba(240,176,64,0.16)" : COLORS.parchment, borderColor: earned ? COLORS.brass : COLORS.line }, className: "rounded-xl border py-2.5 text-center flex flex-col items-center gap-1" },
+            return h("div", { key: n, style: { background: earned ? "rgba(242,183,5,0.14)" : COLORS.parchment, borderColor: earned ? COLORS.brass : COLORS.line }, className: "rounded-xl border py-2.5 text-center flex flex-col items-center gap-1" },
               h(MedalIcon, { earned: earned }),
               h("div", { style: { color: earned ? COLORS.brass : COLORS.ink }, className: "font-display text-sm" }, n + "-Day"),
               h("div", { style: { color: earned ? COLORS.brass : COLORS.slate }, className: "text-[9px]" }, earned ? "Earned" : toGo + " to go")
@@ -1026,8 +1022,8 @@ function AdvisorView(props) {
  
     h("div", null,
       h(SectionTitle, { label: "Log today's activity" }),
-      showNudge && h("div", { style: { background: "rgba(226,96,63,0.14)", borderColor: COLORS.rust, color: COLORS.rust }, className: "rounded-2xl border p-3.5 text-xs mb-3" }, "Nothing logged today yet."),
-      saveError && h("div", { style: { background: "rgba(226,96,63,0.14)", borderColor: COLORS.rust, color: COLORS.rust }, className: "rounded-2xl border p-3 text-xs mb-3" }, "Your last tap may not have saved \u2014 check your connection."),
+      showNudge && h("div", { style: { background: "rgba(226,75,74,0.12)", borderColor: COLORS.rust, color: COLORS.rust }, className: "rounded-2xl border p-3.5 text-xs mb-3" }, "Nothing logged today yet."),
+      saveError && h("div", { style: { background: "rgba(226,75,74,0.12)", borderColor: COLORS.rust, color: COLORS.rust }, className: "rounded-2xl border p-3 text-xs mb-3" }, "Your last tap may not have saved \u2014 check your connection."),
       h("div", { className: "space-y-3" },
         METRICS.map(function (m) {
           var val = entry[m.key] || 0, target = targets[m.key] || 0, hit = target > 0 && val >= target;
@@ -1052,7 +1048,7 @@ function AdvisorView(props) {
         ),
         h("button", { onClick: onToggleSocial, style: { background: entry.social ? COLORS.emphasis : COLORS.card, borderColor: entry.social ? COLORS.emphasis : COLORS.line }, className: "w-full rounded-2xl border p-4 flex items-center justify-between" },
           h("div", { style: { color: entry.social ? "white" : COLORS.ink }, className: "font-medium text-sm" }, "Posted on social media today"),
-          h("div", { style: { borderColor: entry.social ? "white" : COLORS.line, background: entry.social ? "rgba(255,240,224,0.92)" : "transparent" }, className: "w-6 h-6 rounded-md border-2" })
+          h("div", { style: { borderColor: entry.social ? "white" : COLORS.line, background: entry.social ? "rgba(255,255,255,0.9)" : "transparent" }, className: "w-6 h-6 rounded-md border-2" })
         ),
         h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4" },
           h("div", { style: { color: COLORS.slate }, className: "text-xs font-mono uppercase tracking-wide mb-2" }, "Notes (optional)"),
@@ -1099,7 +1095,7 @@ function AdvisorView(props) {
         ? h("div", { style: { background: COLORS.card, borderColor: COLORS.line, color: COLORS.slate }, className: "rounded-2xl border p-5 text-sm text-center" }, "No activity logged yet this week.")
         : h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border divide-y" },
             leaderboard.map(function (row, i) {
-              return h("div", { key: row.code, style: { borderColor: COLORS.line, background: row.code === myCode ? "rgba(224,123,44,0.10)" : "transparent" }, className: "flex items-center gap-3 px-4 py-3" },
+              return h("div", { key: row.code, style: { borderColor: COLORS.line, background: row.code === myCode ? "rgba(255,106,61,0.07)" : "transparent" }, className: "flex items-center gap-3 px-4 py-3" },
                 h("div", { style: { background: i === 0 ? COLORS.brass : COLORS.parchment, color: i === 0 ? COLORS.parchment : COLORS.slate }, className: "font-mono text-xs w-6 h-6 rounded-full flex items-center justify-center shrink-0" }, i + 1),
                 h("div", { style: { color: COLORS.ink }, className: "font-medium text-sm flex-1" }, row.name),
                 h("div", { className: "flex gap-3 font-mono text-xs", style: { color: COLORS.slate } },
@@ -1199,7 +1195,7 @@ function ManagerView(props) {
     ),
     h("div", { style: { background: COLORS.emphasis }, className: "rounded-2xl p-4 flex items-baseline justify-between" },
       h("span", { className: "text-white font-display text-2xl" }, loggedTodayCount + "/" + roster.length),
-      h("span", { style: { color: "rgba(255,240,224,0.6)" }, className: "text-xs" }, "logged something today")
+      h("span", { style: { color: "rgba(255,255,255,0.6)" }, className: "text-xs" }, "logged something today")
     ),
     h("div", null,
       h(SectionTitle, { label: "Today's Momentum" }),
@@ -1255,7 +1251,7 @@ function ManagerView(props) {
         LANES.map(function (lane) {
           return h("button", {
             key: lane.key, onClick: function () { setLbTab(lane.key); },
-            style: { background: lbTab === lane.key ? COLORS.brass : COLORS.card, color: lbTab === lane.key ? COLORS.parchment : COLORS.slate, borderColor: COLORS.line },
+            style: { background: lbTab === lane.key ? COLORS.brass : COLORS.card, color: lbTab === lane.key ? "white" : COLORS.slate, borderColor: COLORS.line },
             className: "px-3 py-1.5 rounded-full border text-xs font-medium"
           }, lane.label);
         })
@@ -1266,7 +1262,7 @@ function ManagerView(props) {
           : (monthBoards[lbTab] || []).map(function (row, i) {
               var fmt = lbTab === "grosser" ? fmtPhp : function (v) { return v; };
               return h("div", { key: row.code, className: "flex items-center gap-3 px-4 py-3" },
-                h("div", { style: { background: i === 0 ? COLORS.brass : COLORS.parchment, color: i === 0 ? COLORS.parchment : COLORS.slate }, className: "font-mono text-xs w-6 h-6 rounded-full flex items-center justify-center shrink-0" }, i + 1),
+                h("div", { style: { background: i === 0 ? COLORS.brass : COLORS.parchment, color: i === 0 ? "white" : COLORS.slate }, className: "font-mono text-xs w-6 h-6 rounded-full flex items-center justify-center shrink-0" }, i + 1),
                 h("div", { style: { color: COLORS.ink }, className: "font-medium text-sm flex-1" }, row.name),
                 h("div", { style: { color: COLORS.brass }, className: "font-mono text-xs font-semibold" }, fmt(row[lbTab]))
               );
@@ -1391,7 +1387,7 @@ function ManagerView(props) {
       h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border divide-y" }, advisorRows)
     ),
     h("button", { onClick: function () { setShowExport(true); }, style: { borderColor: COLORS.line, color: COLORS.ink }, className: "w-full py-3 rounded-2xl border font-medium text-sm" }, "Export last 60 days as CSV"),
-    showExport && h("div", { className: "fixed inset-0 flex items-center justify-center px-5", style: { background: "rgba(3,12,22,0.75)" } },
+    showExport && h("div", { className: "fixed inset-0 flex items-center justify-center px-5", style: { background: "rgba(8,11,17,0.72)" } },
       h("div", { style: { background: COLORS.card }, className: "w-full max-w-md rounded-3xl p-5 max-h-[80vh] flex flex-col" },
         h("div", { className: "flex items-center justify-between mb-3" },
           h("div", { style: { color: COLORS.ink }, className: "font-display text-lg" }, "Export CSV"),
@@ -1471,7 +1467,7 @@ function ForumEventCard(props) {
 }
  
 function RecruitmentView(props) {
-  var readOnly = !!props.readOnly, scorecard = props.scorecard || [], todayLog = props.todayLog, forumEvents = props.forumEvents || [],
+  var readOnly = !!props.readOnly, today = props.today, scorecard = props.scorecard || [], todayLog = props.todayLog, forumEvents = props.forumEvents || [],
     loading = props.loading, pulse = props.pulse, onBumpDaily = props.onBumpDaily, onSaveNote = props.onSaveNote,
     onSaveForumEvent = props.onSaveForumEvent, onRefresh = props.onRefresh;
  
@@ -1490,8 +1486,21 @@ function RecruitmentView(props) {
       h("button", { onClick: onRefresh, style: { color: COLORS.brass }, className: "text-xs font-mono" }, loading ? "\u2026" : "refresh")
     ),
  
+    !readOnly && h(ForumEventCard, { event: latestEvent, onSave: onSaveForumEvent }),
+ 
+    readOnly && latestEvent && h("div", null,
+      h(SectionTitle, { label: "This Month's Forum / LBF" }),
+      h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4 text-sm" },
+        h("div", { style: { color: COLORS.ink } }, shortDate(latestEvent.event_date)),
+        h("div", { style: { color: COLORS.slate }, className: "text-[11px] mt-1" },
+          latestEvent.attendees_count + " / " + latestEvent.registrants_count + " attended" +
+          (latestEvent.venue_confirmed_date ? " \u00b7 venue confirmed " + shortDate(latestEvent.venue_confirmed_date) : "")
+        )
+      )
+    ),
+ 
     !readOnly && h("div", null,
-      h(SectionTitle, { label: "Today" }),
+      h(SectionTitle, { label: today ? prettyDate(today) : "Today" }),
       h("div", { className: "space-y-3" },
         RECRUITMENT_METRICS.map(function (m) {
           var val = (todayLog && todayLog[m.key]) || 0;
@@ -1515,22 +1524,9 @@ function RecruitmentView(props) {
       h("div", { style: { color: COLORS.slate }, className: "text-center text-xs mt-3 font-mono" }, "Every tap saves instantly.")
     ),
  
-    !readOnly && h(ForumEventCard, { event: latestEvent, onSave: onSaveForumEvent }),
- 
-    readOnly && latestEvent && h("div", null,
-      h(SectionTitle, { label: "This Month's Forum / LBF" }),
-      h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4 text-sm" },
-        h("div", { style: { color: COLORS.ink } }, shortDate(latestEvent.event_date)),
-        h("div", { style: { color: COLORS.slate }, className: "text-[11px] mt-1" },
-          latestEvent.attendees_count + " / " + latestEvent.registrants_count + " attended" +
-          (latestEvent.venue_confirmed_date ? " \u00b7 venue confirmed " + shortDate(latestEvent.venue_confirmed_date) : "")
-        )
-      )
-    ),
- 
     (ratioFlag || showUpFlag) && h("div", { className: "space-y-2" },
-      ratioFlag && h("div", { style: { background: "rgba(226,96,63,0.14)", borderColor: COLORS.rust, color: COLORS.rust }, className: "rounded-2xl border p-3 text-xs" }, "Leads are on target but interviews booked are lagging \u2014 review the Facebook messaging script."),
-      showUpFlag && h("div", { style: { background: "rgba(226,96,63,0.14)", borderColor: COLORS.rust, color: COLORS.rust }, className: "rounded-2xl border p-3 text-xs" }, "Interview show-up rate is below target \u2014 send 24hr and 2hr reminders.")
+      ratioFlag && h("div", { style: { background: "rgba(226,75,74,0.12)", borderColor: COLORS.rust, color: COLORS.rust }, className: "rounded-2xl border p-3 text-xs" }, "Leads are on target but interviews booked are lagging \u2014 review the Facebook messaging script."),
+      showUpFlag && h("div", { style: { background: "rgba(226,75,74,0.12)", borderColor: COLORS.rust, color: COLORS.rust }, className: "rounded-2xl border p-3 text-xs" }, "Interview show-up rate is below target \u2014 send 24hr and 2hr reminders.")
     ),
  
     h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-5" },
@@ -1539,7 +1535,7 @@ function RecruitmentView(props) {
           h("div", { style: { color: COLORS.slate }, className: "text-[11px] uppercase tracking-wide font-mono" }, "Weighted score"),
           h("div", { style: { color: COLORS.brass }, className: "font-display text-3xl mt-1" }, Math.round(score) + "%")
         ),
-        h("div", { style: { background: "rgba(240,176,64,0.16)", color: COLORS.brass }, className: "text-[11px] font-semibold px-2.5 py-1.5 rounded-lg text-right" }, tier.level + " \u2014 " + tier.label)
+        h("div", { style: { background: "rgba(242,183,5,0.14)", color: COLORS.brass }, className: "text-[11px] font-semibold px-2.5 py-1.5 rounded-lg text-right" }, tier.level + " \u2014 " + tier.label)
       )
     ),
  

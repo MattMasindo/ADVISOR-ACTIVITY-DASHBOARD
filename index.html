@@ -171,7 +171,7 @@ var BADGE_LEVELS = [10, 20, 30, 45, 90];
 var LANES = [
   { key: "pipeline", label: "Pipeline Builder", hint: "New prospects + initial approaches, this month" },
   { key: "grind", label: "Grind Master", hint: "Clients presented (FNA), this month · min. 15" },
-  { key: "grosser", label: "Top Grosser", hint: "FYP settled, this month" }
+  { key: "grosser", label: "Top Grosser", hint: "FYP settled (manager-verified), this month" }
 ];
 var LANE_AMOUNTS = { pipeline: 300, grind: 500, grosser: 700 };
  
@@ -218,6 +218,7 @@ function App() {
   var myEntriesState = useState({}); var myEntries = myEntriesState[0], setMyEntries = myEntriesState[1];
   var teamEntriesState = useState([]); var teamEntries = teamEntriesState[0], setTeamEntries = teamEntriesState[1];
   var referralsState = useState([]); var referrals = referralsState[0], setReferrals = referralsState[1];
+  var submissionsState = useState([]); var submissions = submissionsState[0], setSubmissions = submissionsState[1];
   var teamLoadingState = useState(false); var teamLoading = teamLoadingState[0], setTeamLoading = teamLoadingState[1];
   var viewState = useState("advisor"); var view = viewState[0], setView = viewState[1];
   var switchingState = useState(false); var switching = switchingState[0], setSwitching = switchingState[1];
@@ -262,10 +263,12 @@ function App() {
     setTeamLoading(true);
     var results = await Promise.all([
       sb.from("entries").select("*"),
-      sb.from("referrals").select("*")
+      sb.from("referrals").select("*"),
+      sb.from("submissions").select("*").order("submitted_date", { ascending: false })
     ]);
     setTeamEntries(results[0].data || []);
     setReferrals(results[1].data || []);
+    setSubmissions(results[2].data || []);
     setTeamLoading(false);
   };
  
@@ -338,6 +341,40 @@ function App() {
     await sb.from("advisors").update({ active: active }).eq("code", code);
   };
  
+  // Advisors log a SUBMITTED application. They cannot mark it settled -
+  // settlement is Sun Life's decision, confirmed by the manager.
+  var addSubmission = async function (amount, serial, clientName, advisorCode) {
+    var amt = Math.round(Number(amount) * 100) / 100;
+    var ser = (serial || "").trim();
+    if (!ser) return { ok: false, message: "Enter the APP serial number." };
+    if (!(amt > 0)) return { ok: false, message: "Enter the FYP amount in pesos." };
+    var res = await sb.from("submissions").insert({
+      advisor_code: advisorCode, submitted_date: today, amount: amt,
+      app_serial: ser, client_name: (clientName || "").trim() || null
+    });
+    if (res.error) {
+      var dup = res.error.code === "23505" || (res.error.message || "").indexOf("duplicate") !== -1;
+      return { ok: false, message: dup ? "That APP serial is already logged." : "Couldn't save. Try again." };
+    }
+    await loadTeamData();
+    return { ok: true };
+  };
+
+  var setSubmissionSettled = async function (id, settled) {
+    setSubmissions(submissions.map(function (s) {
+      return s.id === id ? Object.assign({}, s, { settled: settled, settled_date: settled ? today : null }) : s;
+    }));
+    var res = await sb.from("submissions").update({ settled: settled, settled_date: settled ? today : null }).eq("id", id);
+    if (res && res.error) await loadTeamData();
+  };
+
+  var deleteSubmission = async function (id) {
+    var previous = submissions;
+    setSubmissions(submissions.filter(function (s) { return s.id !== id; }));
+    var res = await sb.from("submissions").delete().eq("id", id);
+    if (res && res.error) setSubmissions(previous);
+  };
+
   var addReferral = async function (candidateName, recipientCode) {
     var name = (candidateName || "").trim();
     if (!name) return { ok: false, message: "Enter the candidate's name." };
@@ -470,7 +507,26 @@ function App() {
     }
     monthBoard[e.advisor_code].pipeline += (e.prospecting || 0) + (e.approaching || 0);
     monthBoard[e.advisor_code].grind += (e.presented || 0);
-    monthBoard[e.advisor_code].grosser += (e.fyp || 0);
+    // grosser intentionally NOT summed from entries.fyp any more - see below
+  });
+
+  // Settled FYP this month, per advisor. Only manager-verified settlements
+  // count, because settlement is Sun Life's decision, not the advisor's.
+  var monthSettled = {}, monthSubmitted = {};
+  submissions.forEach(function (s) {
+    if (!s.submitted_date || s.submitted_date < monthStart || s.submitted_date > today) return;
+    monthSubmitted[s.advisor_code] = (monthSubmitted[s.advisor_code] || 0) + Number(s.amount || 0);
+    if (s.settled) monthSettled[s.advisor_code] = (monthSettled[s.advisor_code] || 0) + Number(s.amount || 0);
+  });
+  Object.keys(monthSettled).forEach(function (code) {
+    if (!monthBoard[code]) {
+      var adv = activeRoster.filter(function (r) { return r.code === code; })[0];
+      if (!adv) return;
+      monthBoard[code] = { code: code, name: adv.name, pipeline: 0, grind: 0, grosser: 0 };
+    }
+  });
+  Object.keys(monthBoard).forEach(function (code) {
+    monthBoard[code].grosser = monthSettled[code] || 0;
   });
   var monthList = Object.keys(monthBoard).map(function (k) { return monthBoard[k]; });
   var monthBoards = {
@@ -480,6 +536,7 @@ function App() {
   };
  
   var myReferrals = referrals.filter(function (r) { return r.recipient_code === myCode; });
+  var mySubmissions = submissions.filter(function (s) { return s.advisor_code === myCode; });
  
   var last7 = [0, 1, 2, 3, 4, 5, 6].map(function (i) { return todayStr(-6 + i); });
   var trendData = last7.map(function (d) {
@@ -513,7 +570,7 @@ function App() {
         h("div", { className: "flex items-center gap-3" },
           h(BattleRiverMark, { size: 34, uid: "aces" }),
           h("div", null,
-            h("div", { style: { color: COLORS.brassLight }, className: "text-[11px] tracking-[0.2em] uppercase font-mono" }, "Battle River \u00b7 v2.9"),
+            h("div", { style: { color: COLORS.brassLight }, className: "text-[11px] tracking-[0.2em] uppercase font-mono" }, "Battle River \u00b7 v3.0"),
             h("div", { className: "font-display text-white text-2xl mt-0.5" }, "Recruitment")
           )
         ),
@@ -557,7 +614,7 @@ function App() {
         h("div", { className: "flex items-center gap-3" },
           h(BattleRiverMark, { size: 34, uid: "hdr" }),
           h("div", null,
-            h("div", { style: { color: COLORS.brassLight }, className: "text-[11px] tracking-[0.2em] uppercase font-mono" }, "Battle River \u00b7 v2.9"),
+            h("div", { style: { color: COLORS.brassLight }, className: "text-[11px] tracking-[0.2em] uppercase font-mono" }, "Battle River \u00b7 v3.0"),
             h("div", { className: "font-display text-white text-2xl mt-0.5" }, myIdentity.name)
           )
         ),
@@ -571,7 +628,9 @@ function App() {
       view === "advisor" && h(AdvisorView, {
         date: today, entry: myTodayEntry, pulse: pulse, targets: targets, saveError: saveError,
         onBump: bump, onToggleSocial: function () { upsertField({ social: !myTodayEntry.social }); }, onNote: function (note) { upsertField({ note: note }); },
-        onFyp: function (val) { upsertField({ fyp: val }); },
+        mySubmissions: mySubmissions,
+        onAddSubmission: function (amount, serial, clientName) { return addSubmission(amount, serial, clientName, myCode); },
+        monthSubmittedMine: monthSubmitted[myCode] || 0, monthSettledMine: monthSettled[myCode] || 0,
         todayTotals: todayTotals, socialToday: socialToday,
         teamCount: new Set(todayRows.map(function (e) { return e.advisor_code; })).size,
         leaderboard: leaderboard, trendData: trendData, funnelData: funnelData, myCode: myCode, loading: teamLoading, onRefresh: loadTeamData,
@@ -583,6 +642,7 @@ function App() {
         missingToday: missingToday, loggedTodayCount: loggedTodayCount, targets: targets, onSaveTargets: saveTargets,
         todayRows: todayRows, monthBoards: monthBoards, referrals: referrals, onUpdateReferral: updateReferral,
         onDeleteReferral: deleteReferral,
+        submissions: submissions, onSetSubmissionSettled: setSubmissionSettled,
         onSetAdvisorActive: setAdvisorActive
       }),
       view === "recruitment" && isManager && h(RecruitmentView, {
@@ -818,7 +878,9 @@ function MedalIcon(props) {
 }
 function AdvisorView(props) {
   var date = props.date, entry = props.entry, pulse = props.pulse, targets = props.targets, saveError = props.saveError,
-    onBump = props.onBump, onToggleSocial = props.onToggleSocial, onNote = props.onNote, onFyp = props.onFyp,
+    onBump = props.onBump, onToggleSocial = props.onToggleSocial, onNote = props.onNote,
+    mySubmissions = props.mySubmissions || [], onAddSubmission = props.onAddSubmission,
+    monthSubmittedMine = props.monthSubmittedMine || 0, monthSettledMine = props.monthSettledMine || 0,
     todayTotals = props.todayTotals, socialToday = props.socialToday, teamCount = props.teamCount,
     leaderboard = props.leaderboard, trendData = props.trendData, funnelData = props.funnelData,
     myCode = props.myCode, loading = props.loading, onRefresh = props.onRefresh,
@@ -1039,13 +1101,10 @@ function AdvisorView(props) {
             )
           );
         }),
-        h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4" },
-          h("div", { style: { color: COLORS.ink }, className: "font-medium text-sm mb-2" }, "FYP settled today (\u20b1)"),
-          h("input", {
-            type: "number", min: 0, defaultValue: entry.fyp || 0, onBlur: function (ev) { onFyp(Math.max(0, parseInt(ev.target.value) || 0)); },
-            style: { borderColor: COLORS.line, background: COLORS.parchment, color: COLORS.ink }, className: "w-full px-3 py-2.5 rounded-xl border outline-none focus:ring-2 font-mono text-sm"
-          })
-        ),
+        h(SubmissionBox, {
+          mySubmissions: mySubmissions, onAddSubmission: onAddSubmission,
+          monthSubmittedMine: monthSubmittedMine, monthSettledMine: monthSettledMine
+        }),
         h("button", { onClick: onToggleSocial, style: { background: entry.social ? COLORS.emphasis : COLORS.card, borderColor: entry.social ? COLORS.emphasis : COLORS.line }, className: "w-full rounded-2xl border p-4 flex items-center justify-between" },
           h("div", { style: { color: entry.social ? "white" : COLORS.ink }, className: "font-medium text-sm" }, "Posted on social media today"),
           h("div", { style: { borderColor: entry.social ? "white" : COLORS.line, background: entry.social ? "rgba(255,255,255,0.9)" : "transparent" }, className: "w-6 h-6 rounded-md border-2" })
@@ -1128,7 +1187,8 @@ function ManagerView(props) {
   var date = props.date, roster = props.roster, activeRoster = props.activeRoster || props.roster, teamEntries = props.teamEntries, loading = props.loading, onRefresh = props.onRefresh,
     missingToday = props.missingToday, loggedTodayCount = props.loggedTodayCount, targets = props.targets, onSaveTargets = props.onSaveTargets,
     todayRows = props.todayRows || [], monthBoards = props.monthBoards || { pipeline: [], grind: [], grosser: [] }, referrals = props.referrals || [], onUpdateReferral = props.onUpdateReferral,
-    onSetAdvisorActive = props.onSetAdvisorActive, onDeleteReferral = props.onDeleteReferral;
+    onSetAdvisorActive = props.onSetAdvisorActive, onDeleteReferral = props.onDeleteReferral,
+    submissions = props.submissions || [], onSetSubmissionSettled = props.onSetSubmissionSettled;
   var selectedState = useState(null); var selected = selectedState[0], setSelected = selectedState[1];
   var editState = useState(false); var editingTargets = editState[0], setEditingTargets = editState[1];
   var draftState = useState(targets); var draft = draftState[0], setDraft = draftState[1];
@@ -1244,6 +1304,60 @@ function ManagerView(props) {
         }),
         editingTargets && h("button", { onClick: function () { onSaveTargets(draft); setEditingTargets(false); }, style: { background: COLORS.emphasis }, className: "w-full py-2.5 rounded-xl text-white text-sm font-medium mt-2" }, "Save targets")
       )
+    ),
+    h("div", null,
+      h(SectionTitle, { label: "FYP Verification" }),
+      h("div", { style: { color: COLORS.slate }, className: "text-[11px] leading-relaxed mb-2.5" },
+        "Advisors log submitted applications. Mark one settled only once Sun Life has approved it \u2014 Top Grosser and the \u20b1700 lane pay out on settled FYP."),
+      (function () {
+        var pending = submissions.filter(function (s) { return !s.settled; });
+        var settled = submissions.filter(function (s) { return s.settled; });
+        function nameFor(code) {
+          var a = roster.filter(function (r) { return r.code === code; })[0];
+          return a ? a.name : code;
+        }
+        function row(s, isPending) {
+          return h("div", {
+            key: s.id,
+            style: { background: COLORS.card, borderColor: isPending ? COLORS.brass : COLORS.line },
+            className: "rounded-2xl border p-3 flex items-center justify-between gap-3"
+          },
+            h("div", { className: "min-w-0 flex-1" },
+              h("div", { className: "flex items-baseline gap-2" },
+                h("span", { style: { color: COLORS.ink }, className: "font-mono text-sm font-semibold" }, fmtPhp(s.amount)),
+                h("span", { style: { color: COLORS.slate }, className: "text-[11px] truncate" }, nameFor(s.advisor_code))
+              ),
+              h("div", { style: { color: COLORS.slate }, className: "text-[10px] font-mono truncate mt-0.5" },
+                s.app_serial + (s.client_name ? " \u00b7 " + s.client_name : "") + " \u00b7 " + shortDate(s.submitted_date))
+            ),
+            isPending
+              ? h("button", {
+                  onClick: function () { onSetSubmissionSettled(s.id, true); },
+                  style: { background: COLORS.good },
+                  className: "px-3 py-2 rounded-xl text-white text-[12px] font-semibold shrink-0 active:scale-95"
+                }, "Mark settled")
+              : h("button", {
+                  onClick: function () { onSetSubmissionSettled(s.id, false); },
+                  style: { borderColor: COLORS.line, color: COLORS.slate },
+                  className: "px-3 py-2 rounded-xl border text-[12px] font-mono shrink-0 active:opacity-60"
+                }, "undo")
+          );
+        }
+        return h("div", { className: "space-y-3" },
+          h("div", null,
+            h("div", { style: { color: COLORS.brass }, className: "text-[11px] font-mono uppercase tracking-wide mb-1.5" },
+              "Pending verification \u00b7 " + pending.length),
+            pending.length === 0
+              ? h("div", { style: { background: COLORS.card, borderColor: COLORS.line, color: COLORS.slate }, className: "rounded-2xl border p-4 text-sm text-center" }, "Nothing waiting.")
+              : h("div", { className: "space-y-2" }, pending.map(function (s) { return row(s, true); }))
+          ),
+          settled.length > 0 && h("div", null,
+            h("div", { style: { color: COLORS.good }, className: "text-[11px] font-mono uppercase tracking-wide mb-1.5" },
+              "Settled \u00b7 " + settled.length + " \u00b7 " + fmtPhp(settled.reduce(function (t, s) { return t + Number(s.amount || 0); }, 0))),
+            h("div", { className: "space-y-2" }, settled.slice(0, 10).map(function (s) { return row(s, false); }))
+          )
+        );
+      })()
     ),
     h("div", null,
       h(SectionTitle, { label: "Monthly Leaderboard" }),
@@ -1562,6 +1676,94 @@ function RecruitmentView(props) {
   );
 }
  
+function SubmissionBox(props) {
+  var mySubmissions = props.mySubmissions, onAddSubmission = props.onAddSubmission;
+  var amtState = useState(""); var amount = amtState[0], setAmount = amtState[1];
+  var serState = useState(""); var serial = serState[0], setSerial = serState[1];
+  var nameState = useState(""); var clientName = nameState[0], setClientName = nameState[1];
+  var errState = useState(""); var error = errState[0], setError = errState[1];
+  var busyState = useState(false); var busy = busyState[0], setBusy = busyState[1];
+  var okState = useState(false); var justSaved = okState[0], setJustSaved = okState[1];
+
+  var submit = async function () {
+    if (busy) return;
+    setError(""); setBusy(true);
+    var res = await onAddSubmission(amount, serial, clientName);
+    setBusy(false);
+    if (!res || !res.ok) { setError((res && res.message) || "Couldn't save."); return; }
+    setAmount(""); setSerial(""); setClientName("");
+    setJustSaved(true); setTimeout(function () { setJustSaved(false); }, 2200);
+  };
+
+  var recent = mySubmissions.slice(0, 6);
+
+  return h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4" },
+    h("div", { style: { color: COLORS.ink }, className: "font-medium text-sm" }, "FYP Submitted Today"),
+    h("div", { style: { color: COLORS.slate }, className: "text-[11px] leading-relaxed mt-1 mb-3" },
+      "Log the application you submitted. Your manager marks it settled once Sun Life approves it."),
+
+    h("div", { className: "space-y-2" },
+      h("input", {
+        type: "number", min: 0, inputMode: "decimal", value: amount, placeholder: "FYP amount (\u20b1)",
+        onChange: function (ev) { setAmount(ev.target.value); },
+        style: { borderColor: COLORS.line, background: COLORS.parchment, color: COLORS.ink },
+        className: "w-full px-3 py-2.5 rounded-xl border outline-none focus:ring-2 font-mono text-sm"
+      }),
+      h("input", {
+        value: serial, placeholder: "APP serial number",
+        onChange: function (ev) { setSerial(ev.target.value); },
+        style: { borderColor: COLORS.line, background: COLORS.parchment, color: COLORS.ink },
+        className: "w-full px-3 py-2.5 rounded-xl border outline-none focus:ring-2 font-mono text-sm"
+      }),
+      h("input", {
+        value: clientName, placeholder: "Client name (optional)",
+        onChange: function (ev) { setClientName(ev.target.value); },
+        onKeyDown: function (ev) { if (ev.key === "Enter") submit(); },
+        style: { borderColor: COLORS.line, background: COLORS.parchment, color: COLORS.ink },
+        className: "w-full px-3 py-2.5 rounded-xl border outline-none focus:ring-2 text-sm"
+      }),
+      error && h("div", { style: { color: COLORS.rust }, className: "text-xs" }, error),
+      justSaved && h("div", { style: { color: COLORS.good }, className: "text-xs" }, "Submitted \u2014 waiting for manager verification."),
+      h("button", {
+        onClick: submit, disabled: busy,
+        style: { background: busy ? COLORS.line : COLORS.emphasis, opacity: busy ? 0.7 : 1 },
+        className: "w-full py-2.5 rounded-xl text-white text-sm font-semibold active:scale-[0.98] transition-transform"
+      }, busy ? "Saving\u2026" : "Add submission")
+    ),
+
+    h("div", { className: "flex items-center gap-4 mt-4 pt-3", style: { borderTop: "1px solid " + COLORS.line } },
+      h("div", null,
+        h("div", { style: { color: COLORS.slate }, className: "text-[10px] font-mono uppercase tracking-wide" }, "Submitted (mo)"),
+        h("div", { style: { color: COLORS.ink }, className: "font-mono text-sm" }, fmtPhp(props.monthSubmittedMine))
+      ),
+      h("div", null,
+        h("div", { style: { color: COLORS.slate }, className: "text-[10px] font-mono uppercase tracking-wide" }, "Settled (mo)"),
+        h("div", { style: { color: COLORS.good }, className: "font-mono text-sm" }, fmtPhp(props.monthSettledMine))
+      )
+    ),
+
+    recent.length > 0 && h("div", { className: "mt-3 space-y-1.5" },
+      recent.map(function (s) {
+        return h("div", {
+          key: s.id,
+          style: { background: COLORS.parchment, borderColor: COLORS.line },
+          className: "rounded-xl border px-3 py-2 flex items-center justify-between gap-2"
+        },
+          h("div", { className: "min-w-0" },
+            h("div", { style: { color: COLORS.ink }, className: "font-mono text-[13px]" }, fmtPhp(s.amount)),
+            h("div", { style: { color: COLORS.slate }, className: "text-[10px] font-mono truncate" },
+              s.app_serial + (s.client_name ? " \u00b7 " + s.client_name : ""))
+          ),
+          h("div", {
+            style: { color: s.settled ? COLORS.good : COLORS.brass },
+            className: "text-[10px] font-mono uppercase tracking-wide shrink-0"
+          }, s.settled ? "\u2713 Settled" : "Pending")
+        );
+      })
+    )
+  );
+}
+
 function SectionTitle(props) {
   return h("div", { className: props.bare ? "" : "mb-2.5" }, h("span", { style: { color: COLORS.ink }, className: "font-display text-base" }, props.label));
 }

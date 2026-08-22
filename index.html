@@ -34,7 +34,7 @@
 (function () {
 "use strict";
 var h = React.createElement;
-var useState = React.useState, useEffect = React.useEffect, useMemo = React.useMemo;
+var useState = React.useState, useEffect = React.useEffect, useMemo = React.useMemo, useRef = React.useRef;
 var sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
  
 var COLORS = {
@@ -279,6 +279,16 @@ function App() {
   var targetsState = useState({}); var targets = targetsState[0], setTargets = targetsState[1];
   var hasPinState = useState(false); var hasManagerPin = hasPinState[0], setHasManagerPin = hasPinState[1];
   var isManagerState = useState(!!lget("is-manager")); var isManager = isManagerState[0], setIsManager = isManagerState[1];
+  // The manager's PIN itself, kept ONLY in memory (never localStorage,
+  // never persisted) — cleared on every page reload by design. Every
+  // manager-only write now re-sends this to a server-side-verifying RPC,
+  // closing the gap where those writes previously needed no PIN at all.
+  var managerPinState = useState(null); var managerPin = managerPinState[0], setManagerPin = managerPinState[1];
+  // Holds the resolve/reject pair for a manager action that's waiting on
+  // the PIN gate to reopen (e.g. after a reload where `is-manager` is
+  // still true locally but the PIN itself was never re-entered this
+  // session).
+  var pinRequestRef = useRef(null);
   var myEntriesState = useState({}); var myEntries = myEntriesState[0], setMyEntries = myEntriesState[1];
   var teamEntriesState = useState([]); var teamEntries = teamEntriesState[0], setTeamEntries = teamEntriesState[1];
   var referralsState = useState([]); var referrals = referralsState[0], setReferrals = referralsState[1];
@@ -364,19 +374,27 @@ function App() {
   };
  
   var updateReferral = async function (id, field, value) {
+    var previous = referrals;
     var patch = {}; patch[field] = value;
     setReferrals(referrals.map(function (r) { return r.id === id ? Object.assign({}, r, patch) : r; }));
-    await sb.from("referrals").update(patch).eq("id", id);
+    try {
+      var pin = await requireManagerPin();
+      var res = await sb.rpc("admin_update_referral", { p_manager_pin: pin, p_referral_id: id, p_field: field, p_value: value });
+      if (res.error || !(res.data && res.data.ok)) { setReferrals(previous); window.alert("Couldn't save that change \u2014 try again."); }
+    } catch (e) { setReferrals(previous); }
   };
  
   var deleteReferral = async function (id) {
     var previous = referrals;
     setReferrals(referrals.filter(function (r) { return r.id !== id; }));
-    var res = await sb.from("referrals").delete().eq("id", id);
-    if (res && res.error) {
-      setReferrals(previous);
-      window.alert("Couldn't remove that candidate — the database rejected it. Check that the delete policy has been added in Supabase.");
-    }
+    try {
+      var pin = await requireManagerPin();
+      var res = await sb.rpc("admin_delete_referral", { p_manager_pin: pin, p_referral_id: id });
+      if (res.error || !(res.data && res.data.ok)) {
+        setReferrals(previous);
+        window.alert("Couldn't remove that candidate \u2014 the database rejected it.");
+      }
+    } catch (e) { setReferrals(previous); }
   };
  
   useEffect(function () {
@@ -436,8 +454,16 @@ function App() {
   // approval, so it's inserted already approved and — importantly — never
   // signs the manager's own session in as the new advisor.
   var managerCreateAdvisor = async function (info) {
-    var res = await sb.from("advisors").insert({ name: info.name, code: info.code, approved: true }).select("id,name,code").single();
-    if (res.error) return { ok: false, message: res.error.code === "23505" ? "That code is already taken — pick another." : "Couldn't save. Try again." };
+    var pin;
+    try { pin = await requireManagerPin(); } catch (e) { return { ok: false, message: "Manager PIN required." }; }
+    var res = await sb.rpc("admin_create_advisor", { p_manager_pin: pin, p_name: info.name, p_code: info.code });
+    if (res.error || !(res.data && res.data.ok)) {
+      var err = res.data && res.data.error;
+      var msg = err === "duplicate_code" ? "That code is already taken — pick another."
+        : err === "bad_pin" ? "Wrong manager PIN — try again."
+        : "Couldn't save. Try again.";
+      return { ok: false, message: msg };
+    }
     var row = res.data;
     setRoster(roster.concat([{ id: row.id, name: row.name, code: row.code, approved: true, active: true }]));
     return { ok: true };
@@ -448,20 +474,34 @@ function App() {
   // Tool's "Add a teammate" flow only ever has a name, no code, until the
   // manager gives them one here.
   var approveAdvisor = async function (id, code) {
-    var patch = { approved: true };
-    if (code) patch.code = code;
-    var res = await sb.from("advisors").update(patch).eq("id", id).select("id,name,code,approved").single();
-    if (res.error) return { ok: false, message: res.error.code === "23505" ? "That code is already taken — pick another." : "Couldn't save. Try again." };
-    setRoster(roster.map(function (r) { return r.id === id ? Object.assign({}, r, res.data) : r; }));
+    var pin;
+    try { pin = await requireManagerPin(); } catch (e) { return { ok: false, message: "Manager PIN required." }; }
+    var res = await sb.rpc("admin_approve_advisor", { p_manager_pin: pin, p_advisor_id: id, p_code: code || null });
+    if (res.error || !(res.data && res.data.ok)) {
+      var err = res.data && res.data.error;
+      var msg = err === "duplicate_code" ? "That code is already taken — pick another."
+        : err === "missing_code" ? "Assign a code before approving."
+        : err === "bad_pin" ? "Wrong manager PIN — try again."
+        : "Couldn't save. Try again.";
+      return { ok: false, message: msg };
+    }
+    var row = res.data;
+    setRoster(roster.map(function (r) { return r.id === id ? Object.assign({}, r, { name: row.name, code: row.code, approved: row.approved }) : r; }));
     return { ok: true };
   };
  
   // Reject a pending self-signup. Safe to hard-delete: an unapproved row
   // can never have logged entries, submissions, or referrals — nothing
-  // else in the database points at it yet.
+  // else in the database points at it yet. The RPC itself refuses to
+  // delete anything already approved, regardless of what's sent here.
   var rejectAdvisor = async function (id) {
+    var previous = roster;
     setRoster(roster.filter(function (r) { return r.id !== id; }));
-    await sb.from("advisors").delete().eq("id", id);
+    try {
+      var pin = await requireManagerPin();
+      var res = await sb.rpc("admin_reject_advisor", { p_manager_pin: pin, p_advisor_id: id });
+      if (res.error || !(res.data && res.data.ok)) setRoster(previous);
+    } catch (e) { setRoster(previous); }
   };
  
   // Re-checks this device's pending self-signup against the database.
@@ -485,8 +525,13 @@ function App() {
   };
  
   var setAdvisorActive = async function (code, active) {
+    var previous = roster;
     setRoster(roster.map(function (r) { return r.code === code ? Object.assign({}, r, { active: active }) : r; }));
-    await sb.from("advisors").update({ active: active }).eq("code", code);
+    try {
+      var pin = await requireManagerPin();
+      var res = await sb.rpc("admin_set_advisor_active", { p_manager_pin: pin, p_code: code, p_active: active });
+      if (res.error || !(res.data && res.data.ok)) setRoster(previous);
+    } catch (e) { setRoster(previous); }
   };
  
   // Advisors log a SUBMITTED application. They cannot mark it settled -
@@ -509,18 +554,25 @@ function App() {
   };
  
   var setSubmissionSettled = async function (id, settled) {
+    var previous = submissions;
     setSubmissions(submissions.map(function (s) {
       return s.id === id ? Object.assign({}, s, { settled: settled, settled_date: settled ? today : null }) : s;
     }));
-    var res = await sb.from("submissions").update({ settled: settled, settled_date: settled ? today : null }).eq("id", id);
-    if (res && res.error) await loadTeamData();
+    try {
+      var pin = await requireManagerPin();
+      var res = await sb.rpc("admin_set_submission_settled", { p_manager_pin: pin, p_submission_id: id, p_settled: settled });
+      if (res.error || !(res.data && res.data.ok)) setSubmissions(previous);
+    } catch (e) { setSubmissions(previous); }
   };
  
   var deleteSubmission = async function (id) {
     var previous = submissions;
     setSubmissions(submissions.filter(function (s) { return s.id !== id; }));
-    var res = await sb.from("submissions").delete().eq("id", id);
-    if (res && res.error) setSubmissions(previous);
+    try {
+      var pin = await requireManagerPin();
+      var res = await sb.rpc("admin_delete_submission", { p_manager_pin: pin, p_submission_id: id });
+      if (res.error || !(res.data && res.data.ok)) setSubmissions(previous);
+    } catch (e) { setSubmissions(previous); }
   };
  
   var addReferral = async function (candidateName, recipientCode) {
@@ -591,10 +643,13 @@ function App() {
   };
  
   var saveTargets = async function (draft) {
+    var previous = targets;
     setTargets(draft);
-    await Promise.all(Object.keys(draft).map(function (stage) {
-      return sb.from("targets").upsert({ stage: stage, daily_target: draft[stage] }, { onConflict: "stage" });
-    }));
+    try {
+      var pin = await requireManagerPin();
+      var res = await sb.rpc("admin_save_targets", { p_manager_pin: pin, p_targets: draft });
+      if (res.error || !(res.data && res.data.ok)) setTargets(previous);
+    } catch (e) { setTargets(previous); }
   };
  
   var unlockManager = async function (pin) {
@@ -603,17 +658,39 @@ function App() {
       if (!setRes.data) return false;
       setHasManagerPin(true);
       setIsManager(true); lset("is-manager", true);
+      setManagerPin(pin);
       setShowManagerGate(false); setView("manager");
+      if (pinRequestRef.current) { pinRequestRef.current.resolve(pin); pinRequestRef.current = null; }
       return true;
     }
     var checkRes = await sb.rpc("check_manager_pin", { p_candidate: pin });
     if (checkRes.data) {
       setIsManager(true); lset("is-manager", true);
+      setManagerPin(pin);
       setShowManagerGate(false); setView("manager");
+      if (pinRequestRef.current) { pinRequestRef.current.resolve(pin); pinRequestRef.current = null; }
       return true;
     }
     return false;
   };
+ 
+  // Every manager-only write goes through this first. If the PIN is
+  // already cached in memory (unlocked earlier this session), resolves
+  // immediately; otherwise re-opens the PIN gate and waits for it, so a
+  // stale "is-manager" flag from localStorage (surviving a reload) can
+  // never authorize a write without the PIN actually being re-entered.
+  function requireManagerPin() {
+    if (managerPin) return Promise.resolve(managerPin);
+    return new Promise(function (resolve, reject) {
+      pinRequestRef.current = { resolve: resolve, reject: reject };
+      setShowManagerGate(true);
+    });
+  }
+ 
+  function cancelManagerGate() {
+    setShowManagerGate(false);
+    if (pinRequestRef.current) { pinRequestRef.current.reject(new Error("cancelled")); pinRequestRef.current = null; }
+  }
  
   var activeRoster = roster.filter(function (r) { return r.active !== false && r.approved !== false; });
   var pendingRoster = roster.filter(function (r) { return r.approved === false; });
@@ -820,7 +897,7 @@ function App() {
               onEnterRecruitment: function () { setIsRecruitment(true); lset("is-recruitment", true); setSwitching(false); }
             })
           : mainBody),
-    showManagerGate && h(ManagerGate, { hasPin: hasManagerPin, onSubmit: unlockManager, onClose: function () { setShowManagerGate(false); } })
+    showManagerGate && h(ManagerGate, { hasPin: hasManagerPin, onSubmit: unlockManager, onClose: cancelManagerGate })
   );
 }
  

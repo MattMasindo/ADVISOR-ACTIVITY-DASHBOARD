@@ -112,14 +112,14 @@ function referralPayout(r) {
   return (r.signed_paid ? 500 : 0) + (r.coded_paid ? 1000 : 0) + (r.retained_paid ? 1500 : 0);
 }
 var LANE_MINIMUMS = { grind: 15 };
-
+ 
 function laneBasisText(laneKey, value) {
   if (laneKey === "grosser") return fmtPhp(value) + " settled FYP";
   if (laneKey === "pipeline") return value + " prospects + approaches";
   if (laneKey === "grind") return value + " clients presented";
   return String(value);
 }
-
+ 
 // Returns the itemised REASONS an advisor is owed money. computeReceivable
 // sums these, so the headline figure and the breakdown can never disagree.
 function receivableItems(code, referrals, monthBoards) {
@@ -145,7 +145,7 @@ function receivableItems(code, referrals, monthBoards) {
   });
   return items;
 }
-
+ 
 function computeReceivable(code, referrals, monthBoards) {
   var items = receivableItems(code, referrals, monthBoards);
   var confirmed = items.reduce(function (s, i) { return s + (i.kind === "confirmed" ? i.amount : 0); }, 0);
@@ -235,10 +235,38 @@ function fmtKpiTarget(row) {
   return Math.round(row.target_value) + "+";
 }
  
+// ======================================================================
+// ADVISOR PIN GATE — calls the SAME verify_advisor_pin() RPC the Script
+// Tool already uses (security-definer, never returns the hash/plaintext).
+// One PIN per advisor, shared across both apps, by design. The RPC itself
+// decides "first time, set it" vs "compare it" — this client helper just
+// turns its jsonb result into something the UI can read plainly. Nothing
+// here modifies that RPC; it must already exist in this Supabase project
+// for this to work (see PROJECT_TRACKER for the Script Tool's Patch 3
+// migration that created it).
+// ======================================================================
+async function verifyAdvisorPin(advisorId, pin) {
+  try {
+    var res = await sb.rpc("verify_advisor_pin", { p_advisor_id: advisorId, p_pin: pin });
+    if (res.error) return { error: "Couldn't check that PIN \u2014 try again." };
+    var d = res.data || {};
+    if (d.error === "pin_too_short") return { error: "PIN must be at least 4 digits." };
+    if (d.error === "not_found") return { error: "That advisor couldn't be found." };
+    if (d.error === "locked") return { error: "Too many wrong tries \u2014 wait a few minutes and try again." };
+    if (!d.ok) return { error: "Wrong PIN \u2014 try again." };
+    return { data: { created: !!d.created } };
+  } catch (e) { return { error: "Couldn't reach the server \u2014 try again." }; }
+}
+ 
 function App() {
   var loadingState = useState(true); var loading = loadingState[0], setLoading = loadingState[1];
   var dbErrorState = useState(null); var dbError = dbErrorState[0], setDbError = dbErrorState[1];
   var myIdentityState = useState(lget("my-identity")); var myIdentity = myIdentityState[0], setMyIdentity = myIdentityState[1];
+  // A self-registered advisor who hasn't been approved by the manager yet.
+  // Kept separate from myIdentity on purpose: this device knows who they
+  // claim to be, but they can't act as that advisor (no entries, no PIN)
+  // until approved flips to true.
+  var pendingSelfState = useState(lget("br-pending-advisor")); var pendingSelf = pendingSelfState[0], setPendingSelfState = pendingSelfState[1];
   var rosterState = useState([]); var roster = rosterState[0], setRoster = rosterState[1];
   var targetsState = useState({}); var targets = targetsState[0], setTargets = targetsState[1];
   var hasPinState = useState(false); var hasManagerPin = hasPinState[0], setHasManagerPin = hasPinState[1];
@@ -356,12 +384,76 @@ function App() {
     setMyEntries(map);
   };
  
-  var createAdvisor = async function (info) {
-    var res = await sb.from("advisors").insert({ name: info.name, code: info.code });
+  function setPendingSelf(p) {
+    setPendingSelfState(p);
+    lset("br-pending-advisor", p);
+  }
+ 
+  // Self-service "+ I'm new here". Unlike the old flow, this no longer
+  // signs the device in as the new advisor — it inserts a NOT-YET-APPROVED
+  // row (approved: false) and hands back to a waiting screen. The manager
+  // has to approve them (Manager tab) before they can pick their name and
+  // set a PIN. Existing rows are untouched — `approved` defaults to true
+  // in the database for everyone who was already there before this shipped.
+  var selfRegisterAdvisor = async function (info) {
+    var res = await sb.from("advisors").insert({ name: info.name, code: info.code, approved: false }).select("id,name,code").single();
     if (res.error) return { ok: false, message: res.error.code === "23505" ? "That code is already taken — pick another." : "Couldn't save. Try again." };
-    setRoster(roster.concat([{ name: info.name, code: info.code }]));
-    await chooseAdvisor({ name: info.name, code: info.code });
+    var row = res.data;
+    setRoster(roster.concat([{ id: row.id, name: row.name, code: row.code, approved: false }]));
+    setPendingSelf({ id: row.id, name: row.name, code: row.code });
     return { ok: true };
+  };
+ 
+  // Manager tab → "Add advisor". The manager typing this in IS the
+  // approval, so it's inserted already approved and — importantly — never
+  // signs the manager's own session in as the new advisor.
+  var managerCreateAdvisor = async function (info) {
+    var res = await sb.from("advisors").insert({ name: info.name, code: info.code, approved: true }).select("id,name,code").single();
+    if (res.error) return { ok: false, message: res.error.code === "23505" ? "That code is already taken — pick another." : "Couldn't save. Try again." };
+    var row = res.data;
+    setRoster(roster.concat([{ id: row.id, name: row.name, code: row.code, approved: true, active: true }]));
+    return { ok: true };
+  };
+ 
+  // Approve a pending self-signup, optionally assigning/correcting the code
+  // at the same time — needed because a teammate added via the Script
+  // Tool's "Add a teammate" flow only ever has a name, no code, until the
+  // manager gives them one here.
+  var approveAdvisor = async function (id, code) {
+    var patch = { approved: true };
+    if (code) patch.code = code;
+    var res = await sb.from("advisors").update(patch).eq("id", id).select("id,name,code,approved").single();
+    if (res.error) return { ok: false, message: res.error.code === "23505" ? "That code is already taken — pick another." : "Couldn't save. Try again." };
+    setRoster(roster.map(function (r) { return r.id === id ? Object.assign({}, r, res.data) : r; }));
+    return { ok: true };
+  };
+ 
+  // Reject a pending self-signup. Safe to hard-delete: an unapproved row
+  // can never have logged entries, submissions, or referrals — nothing
+  // else in the database points at it yet.
+  var rejectAdvisor = async function (id) {
+    setRoster(roster.filter(function (r) { return r.id !== id; }));
+    await sb.from("advisors").delete().eq("id", id);
+  };
+ 
+  // Re-checks this device's pending self-signup against the database.
+  // Manual "Check again" button, not a poll — consistent with the
+  // Sync-now / Restore-from-cloud pattern already used in the Script Tool.
+  var checkMyApprovalStatus = async function () {
+    if (!pendingSelf) return { approved: false };
+    var res = await sb.from("advisors").select("id,name,code,approved").eq("id", pendingSelf.id).maybeSingle();
+    if (res.error || !res.data) return { approved: false, error: "Couldn't check right now — try again." };
+    if (res.data.approved === false) return { approved: false };
+    setPendingSelf({ id: res.data.id, name: res.data.name, code: res.data.code });
+    return { approved: true, advisor: { id: res.data.id, name: res.data.name, code: res.data.code } };
+  };
+ 
+  var cancelPendingSelf = function () { setPendingSelf(null); };
+ 
+  // Called once the pending advisor sets their PIN successfully.
+  var completePendingClaim = async function (identity) {
+    setPendingSelf(null);
+    await chooseAdvisor(identity);
   };
  
   var setAdvisorActive = async function (code, active) {
@@ -387,7 +479,7 @@ function App() {
     await loadTeamData();
     return { ok: true };
   };
-
+ 
   var setSubmissionSettled = async function (id, settled) {
     setSubmissions(submissions.map(function (s) {
       return s.id === id ? Object.assign({}, s, { settled: settled, settled_date: settled ? today : null }) : s;
@@ -395,14 +487,14 @@ function App() {
     var res = await sb.from("submissions").update({ settled: settled, settled_date: settled ? today : null }).eq("id", id);
     if (res && res.error) await loadTeamData();
   };
-
+ 
   var deleteSubmission = async function (id) {
     var previous = submissions;
     setSubmissions(submissions.filter(function (s) { return s.id !== id; }));
     var res = await sb.from("submissions").delete().eq("id", id);
     if (res && res.error) setSubmissions(previous);
   };
-
+ 
   var addReferral = async function (candidateName, recipientCode) {
     var name = (candidateName || "").trim();
     if (!name) return { ok: false, message: "Enter the candidate's name." };
@@ -495,7 +587,8 @@ function App() {
     return false;
   };
  
-  var activeRoster = roster.filter(function (r) { return r.active !== false; });
+  var activeRoster = roster.filter(function (r) { return r.active !== false && r.approved !== false; });
+  var pendingRoster = roster.filter(function (r) { return r.approved === false; });
  
   var todayRows = teamEntries.filter(function (e) { return e.entry_date === today; });
   var todayTotals = {};
@@ -537,7 +630,7 @@ function App() {
     monthBoard[e.advisor_code].grind += (e.presented || 0);
     // grosser intentionally NOT summed from entries.fyp any more - see below
   });
-
+ 
   // Settled FYP this month, per advisor. Only manager-verified settlements
   // count, because settlement is Sun Life's decision, not the advisor's.
   var monthSettled = {}, monthSubmitted = {};
@@ -671,7 +764,9 @@ function App() {
         todayRows: todayRows, monthBoards: monthBoards, referrals: referrals, onUpdateReferral: updateReferral,
         onDeleteReferral: deleteReferral,
         submissions: submissions, onSetSubmissionSettled: setSubmissionSettled,
-        onSetAdvisorActive: setAdvisorActive
+        onSetAdvisorActive: setAdvisorActive,
+        pendingRoster: pendingRoster, onAddAdvisor: managerCreateAdvisor,
+        onApproveAdvisor: approveAdvisor, onRejectAdvisor: rejectAdvisor
       }),
       view === "recruitment" && isManager && h(RecruitmentView, {
         readOnly: true, today: today, scorecard: recruitment.scorecard, forumEvents: recruitment.forumEvents,
@@ -681,36 +776,63 @@ function App() {
   }
  
   return h("div", { style: { background: COLORS.parchment, minHeight: "100vh" } },
-    showOnboarding
-      ? h(Onboarding, {
-          roster: activeRoster, onChoose: chooseAdvisor, onCreate: createAdvisor, cancelable: !!myIdentity, onCancel: function () { setSwitching(false); },
-          onEnterRecruitment: function () { setIsRecruitment(true); lset("is-recruitment", true); setSwitching(false); }
+    pendingSelf
+      ? h(WaitingApprovalScreen, {
+          pending: pendingSelf,
+          onCheck: checkMyApprovalStatus,
+          onVerifyPin: verifyAdvisorPin,
+          onDone: completePendingClaim,
+          onCancel: cancelPendingSelf
         })
-      : mainBody,
+      : (showOnboarding
+          ? h(Onboarding, {
+              roster: activeRoster, onChoose: chooseAdvisor, onCreate: selfRegisterAdvisor, onVerifyPin: verifyAdvisorPin,
+              cancelable: !!myIdentity, onCancel: function () { setSwitching(false); },
+              onEnterRecruitment: function () { setIsRecruitment(true); lset("is-recruitment", true); setSwitching(false); }
+            })
+          : mainBody),
     showManagerGate && h(ManagerGate, { hasPin: hasManagerPin, onSubmit: unlockManager, onClose: function () { setShowManagerGate(false); } })
   );
 }
  
 function Onboarding(props) {
-  var roster = props.roster, onChoose = props.onChoose, onCreate = props.onCreate, cancelable = props.cancelable, onCancel = props.onCancel, onEnterRecruitment = props.onEnterRecruitment;
+  var roster = props.roster, onChoose = props.onChoose, onCreate = props.onCreate, onVerifyPin = props.onVerifyPin,
+    cancelable = props.cancelable, onCancel = props.onCancel, onEnterRecruitment = props.onEnterRecruitment;
   var modeState = useState("role"); var mode = modeState[0], setMode = modeState[1];
   var roleState = useState("advisor"); var role = roleState[0], setRole = roleState[1];
   var targetState = useState(null); var target = targetState[0], setTarget = targetState[1];
   var pinState = useState(""); var pin = pinState[0], setPin = pinState[1];
+  var pinBusyState = useState(false); var pinBusy = pinBusyState[0], setPinBusy = pinBusyState[1];
   var errorState = useState(""); var error = errorState[0], setError = errorState[1];
   var newNameState = useState(""); var newName = newNameState[0], setNewName = newNameState[1];
   var newCodeState = useState(""); var newCode = newCodeState[0], setNewCode = newCodeState[1];
+  var newBusyState = useState(false); var newBusy = newBusyState[0], setNewBusy = newBusyState[1];
  
+  // Shared PIN gate — calls the same verify_advisor_pin() RPC the Script
+  // Tool uses. Whoever types the PIN first sets it; after that it's a real
+  // check. Non-committal copy below on purpose, since the client never
+  // knows in advance whether this is a first-time set or a real compare.
   var submitPin = function () {
-    if (pin.trim().toLowerCase() === target.code.trim().toLowerCase()) onChoose({ name: target.name, code: target.code }, role === "manager");
-    else { setError("That code doesn't match. Try again."); setPin(""); }
+    if (pinBusy || !target) return;
+    if (pin.trim().length < 4) { setError("PIN must be at least 4 digits."); return; }
+    setError(""); setPinBusy(true);
+    onVerifyPin(target.id, pin.trim()).then(function (res) {
+      setPinBusy(false);
+      if (res.error) { setError(res.error); setPin(""); return; }
+      onChoose({ id: target.id, name: target.name, code: target.code }, role === "manager");
+    });
   };
   var submitNew = async function () {
+    if (newBusy) return;
     var name = newName.trim(), code = newCode.trim();
     if (!name || !code) { setError("Enter your name and a code."); return; }
     if (code.length < 4) { setError("Your code needs to be at least 4 characters."); return; }
+    setError(""); setNewBusy(true);
     var res = await onCreate({ name: name, code: code });
+    setNewBusy(false);
     if (!res.ok) setError(res.message);
+    // On success, the parent (App) switches this device into the "waiting
+    // for approval" screen — nothing further to do here.
   };
  
   if (mode === "role") {
@@ -754,24 +876,26 @@ function Onboarding(props) {
     return h("div", { className: "max-w-md mx-auto min-h-screen flex flex-col justify-center px-6 py-10" },
       h("div", { className: "text-center mb-8" },
         h("div", { style: { color: COLORS.ink }, className: "font-display text-2xl" }, target.name),
-        h("div", { style: { color: COLORS.slate }, className: "text-sm mt-1" }, "Enter your advisor code to continue")
+        h("div", { style: { color: COLORS.slate }, className: "text-sm mt-1 leading-relaxed" },
+          "Enter your PIN. If this is the first time anyone has signed in as " + target.name + ", whatever you type here becomes their PIN going forward — make sure it's really them typing it.")
       ),
       h("input", {
-        value: pin, onChange: function (ev) { setPin(ev.target.value); },
+        value: pin, type: "password", inputMode: "numeric", pattern: "[0-9]*", maxLength: 6,
+        onChange: function (ev) { setPin(ev.target.value.replace(/[^0-9]/g, "")); },
         onKeyDown: function (ev) { if (ev.key === "Enter") submitPin(); }, autoFocus: true,
-        style: { borderColor: COLORS.line, background: COLORS.card, color: COLORS.ink },
-        className: "w-full px-4 py-3 rounded-2xl border outline-none focus:ring-2 text-center text-xl font-mono", placeholder: "Your code"
+        style: { borderColor: COLORS.line, background: COLORS.card, color: COLORS.ink, letterSpacing: "0.4em" },
+        className: "w-full px-4 py-3 rounded-2xl border outline-none focus:ring-2 text-center text-xl font-mono", placeholder: "4\u20136 digit PIN"
       }),
       error && h("div", { style: { color: COLORS.rust }, className: "text-xs text-center mt-2" }, error),
-      h("button", { onClick: submitPin, style: { background: COLORS.emphasis }, className: "w-full py-3 rounded-2xl text-white font-medium mt-4" }, "Unlock"),
-      h("button", { onClick: function () { setMode("pick"); }, style: { color: COLORS.slate }, className: "mt-4 text-sm text-center underline" }, "Back")
+      h("button", { onClick: submitPin, disabled: pinBusy, style: { background: COLORS.emphasis, opacity: pinBusy ? 0.7 : 1 }, className: "w-full py-3 rounded-2xl text-white font-medium mt-4" }, pinBusy ? "Checking\u2026" : "Continue"),
+      h("button", { onClick: function () { setMode("pick"); setPin(""); setError(""); }, style: { color: COLORS.slate }, className: "mt-4 text-sm text-center underline" }, "Back")
     );
   }
   if (mode === "new") {
     return h("div", { className: "max-w-md mx-auto min-h-screen flex flex-col justify-center px-6 py-10" },
       h("div", { className: "text-center mb-8" },
         h("div", { style: { color: COLORS.brass }, className: "text-[11px] tracking-[0.25em] uppercase font-mono mb-2" }, "New Advisor"),
-        h("div", { style: { color: COLORS.ink }, className: "font-display text-3xl" }, "Set up your log")
+        h("div", { style: { color: COLORS.ink }, className: "font-display text-3xl" }, "Request access")
       ),
       h("div", { className: "space-y-2" },
         h("input", { value: newName, onChange: function (ev) { setNewName(ev.target.value); }, placeholder: "Full name",
@@ -779,8 +903,9 @@ function Onboarding(props) {
         h("input", { value: newCode, onChange: function (ev) { setNewCode(ev.target.value); }, onKeyDown: function (ev) { if (ev.key === "Enter") submitNew(); }, placeholder: "Advisor code",
           style: { borderColor: COLORS.line, background: COLORS.card, color: COLORS.ink }, className: "w-full px-4 py-3 rounded-2xl border outline-none focus:ring-2 font-mono" }),
         error && h("div", { style: { color: COLORS.rust }, className: "text-xs" }, error),
-        h("div", { style: { color: COLORS.slate }, className: "text-[11px] leading-relaxed pt-1" }, "Your code is also your login from now on — keep it to yourself."),
-        h("button", { onClick: submitNew, style: { background: COLORS.emphasis }, className: "w-full py-3 rounded-2xl text-white font-medium mt-2" }, "Create my log")
+        h("div", { style: { color: COLORS.slate }, className: "text-[11px] leading-relaxed pt-1" },
+          "Your code is just your ID from here \u2014 you'll set a real PIN once a manager approves you. This doesn't sign you in yet."),
+        h("button", { onClick: submitNew, disabled: newBusy, style: { background: COLORS.emphasis, opacity: newBusy ? 0.7 : 1 }, className: "w-full py-3 rounded-2xl text-white font-medium mt-2" }, newBusy ? "Submitting\u2026" : "Request access")
       ),
       h("button", { onClick: function () { setError(""); setMode("pick"); }, style: { color: COLORS.slate }, className: "mt-6 text-sm text-center underline" }, "Back")
     );
@@ -804,6 +929,76 @@ function Onboarding(props) {
     h("button", { onClick: function () { setError(""); setMode("new"); }, style: { borderColor: COLORS.line, color: COLORS.ink }, className: "w-full py-3.5 rounded-2xl border border-dashed font-medium text-sm" }, "+ I'm new here"),
     h("button", { onClick: function () { setError(""); setMode("role"); }, style: { color: COLORS.slate }, className: "mt-5 text-sm text-center underline" }, "Back"),
     cancelable && h("button", { onClick: onCancel, style: { color: COLORS.slate }, className: "mt-3 text-sm text-center underline" }, "Cancel")
+  );
+}
+ 
+// Shown instead of the normal Onboarding/app whenever this device has a
+// self-registered advisor who hasn't been approved yet. Two internal
+// states: waiting (not approved yet — manual "Check again", no polling,
+// consistent with the Sync-now / Restore-from-cloud pattern elsewhere in
+// this system) and claim-pin (approved — set/enter the shared PIN once,
+// then it's the normal verify_advisor_pin() flow from here on).
+function WaitingApprovalScreen(props) {
+  var pending = props.pending, onCheck = props.onCheck, onVerifyPin = props.onVerifyPin, onDone = props.onDone, onCancel = props.onCancel;
+  var approvedState = useState(false); var approved = approvedState[0], setApproved = approvedState[1];
+  var checkingState = useState(false); var checking = checkingState[0], setChecking = checkingState[1];
+  var checkMsgState = useState(""); var checkMsg = checkMsgState[0], setCheckMsg = checkMsgState[1];
+  var pinState = useState(""); var pin = pinState[0], setPin = pinState[1];
+  var pinBusyState = useState(false); var pinBusy = pinBusyState[0], setPinBusy = pinBusyState[1];
+  var pinErrState = useState(""); var pinErr = pinErrState[0], setPinErr = pinErrState[1];
+ 
+  var check = async function () {
+    setChecking(true); setCheckMsg("");
+    var res = await onCheck();
+    setChecking(false);
+    if (res.error) { setCheckMsg(res.error); return; }
+    if (res.approved) { setApproved(true); return; }
+    setCheckMsg("Still waiting \u2014 check back later.");
+  };
+ 
+  var submitPin = function () {
+    if (pinBusy) return;
+    if (pin.trim().length < 4) { setPinErr("PIN must be at least 4 digits."); return; }
+    setPinErr(""); setPinBusy(true);
+    onVerifyPin(pending.id, pin.trim()).then(function (res) {
+      setPinBusy(false);
+      if (res.error) { setPinErr(res.error); setPin(""); return; }
+      onDone({ id: pending.id, name: pending.name, code: pending.code });
+    });
+  };
+ 
+  if (approved) {
+    return h("div", { className: "max-w-md mx-auto min-h-screen flex flex-col justify-center px-6 py-10" },
+      h("div", { className: "text-center mb-8" },
+        h("div", { className: "flex justify-center mb-4" }, h(BattleRiverMark, { size: 56, uid: "claim" })),
+        h("div", { style: { color: COLORS.good }, className: "text-[11px] tracking-[0.22em] uppercase font-mono" }, "Approved"),
+        h("div", { style: { color: COLORS.ink }, className: "font-display text-2xl mt-1.5" }, pending.name),
+        h("div", { style: { color: COLORS.slate }, className: "text-sm mt-2 leading-relaxed" },
+          "Set your PIN now \u2014 whatever you type becomes your PIN going forward.")
+      ),
+      h("input", {
+        value: pin, type: "password", inputMode: "numeric", pattern: "[0-9]*", maxLength: 6,
+        onChange: function (ev) { setPin(ev.target.value.replace(/[^0-9]/g, "")); },
+        onKeyDown: function (ev) { if (ev.key === "Enter") submitPin(); }, autoFocus: true,
+        style: { borderColor: COLORS.line, background: COLORS.card, color: COLORS.ink, letterSpacing: "0.4em" },
+        className: "w-full px-4 py-3 rounded-2xl border outline-none focus:ring-2 text-center text-xl font-mono", placeholder: "4\u20136 digit PIN"
+      }),
+      pinErr && h("div", { style: { color: COLORS.rust }, className: "text-xs text-center mt-2" }, pinErr),
+      h("button", { onClick: submitPin, disabled: pinBusy, style: { background: COLORS.emphasis, opacity: pinBusy ? 0.7 : 1 }, className: "w-full py-3 rounded-2xl text-white font-medium mt-4" }, pinBusy ? "Checking\u2026" : "Continue")
+    );
+  }
+ 
+  return h("div", { className: "max-w-md mx-auto min-h-screen flex flex-col justify-center px-6 py-10" },
+    h("div", { className: "text-center mb-8" },
+      h("div", { className: "flex justify-center mb-4" }, h(BattleRiverMark, { size: 56, uid: "wait" })),
+      h("div", { style: { color: COLORS.brass }, className: "text-[11px] tracking-[0.22em] uppercase font-mono" }, "Waiting for approval"),
+      h("div", { style: { color: COLORS.ink }, className: "font-display text-2xl mt-1.5" }, pending.name),
+      h("div", { style: { color: COLORS.slate }, className: "text-sm mt-2 leading-relaxed" },
+        "Your manager needs to approve this account before you can sign in and set your PIN.")
+    ),
+    checkMsg && h("div", { style: { color: COLORS.slate }, className: "text-xs text-center mb-3" }, checkMsg),
+    h("button", { onClick: check, disabled: checking, style: { background: COLORS.emphasis, opacity: checking ? 0.7 : 1 }, className: "w-full py-3 rounded-2xl text-white font-medium" }, checking ? "Checking\u2026" : "Check again"),
+    h("button", { onClick: onCancel, style: { color: COLORS.slate }, className: "mt-5 text-sm text-center underline w-full" }, "Not me \u2014 cancel")
   );
 }
  
@@ -1216,8 +1411,11 @@ function ManagerView(props) {
     missingToday = props.missingToday, loggedTodayCount = props.loggedTodayCount, targets = props.targets, onSaveTargets = props.onSaveTargets,
     todayRows = props.todayRows || [], monthBoards = props.monthBoards || { pipeline: [], grind: [], grosser: [] }, referrals = props.referrals || [], onUpdateReferral = props.onUpdateReferral,
     onSetAdvisorActive = props.onSetAdvisorActive, onDeleteReferral = props.onDeleteReferral,
-    submissions = props.submissions || [], onSetSubmissionSettled = props.onSetSubmissionSettled;
+    submissions = props.submissions || [], onSetSubmissionSettled = props.onSetSubmissionSettled,
+    pendingRoster = props.pendingRoster || [], onAddAdvisor = props.onAddAdvisor,
+    onApproveAdvisor = props.onApproveAdvisor, onRejectAdvisor = props.onRejectAdvisor;
   var selectedState = useState(null); var selected = selectedState[0], setSelected = selectedState[1];
+  var addAdvisorState = useState(false); var showAddAdvisor = addAdvisorState[0], setShowAddAdvisor = addAdvisorState[1];
   var editState = useState(false); var editingTargets = editState[0], setEditingTargets = editState[1];
   var draftState = useState(targets); var draft = draftState[0], setDraft = draftState[1];
   var exportState = useState(false); var showExport = exportState[0], setShowExport = exportState[1];
@@ -1564,6 +1762,8 @@ function ManagerView(props) {
         );
       })()
     ),
+    h(AddAdvisorCard, { open: showAddAdvisor, onToggle: function () { setShowAddAdvisor(!showAddAdvisor); }, onAddAdvisor: onAddAdvisor }),
+    pendingRoster.length > 0 && h(PendingApprovalCard, { pendingRoster: pendingRoster, onApprove: onApproveAdvisor, onReject: onRejectAdvisor }),
     h("div", null,
       h(SectionTitle, { label: "Advisors" }),
       h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border divide-y" }, advisorRows)
@@ -1581,6 +1781,119 @@ function ManagerView(props) {
         }),
         h("button", { onClick: function () { navigator.clipboard.writeText(csv).catch(function () {}); }, style: { background: COLORS.emphasis }, className: "w-full py-3 rounded-2xl text-white font-medium mt-3" }, "Copy to clipboard")
       )
+    )
+  );
+}
+ 
+// Manager tab → create an advisor account directly. This IS the approval —
+// rows created here go in already approved, and this never signs the
+// manager's own session in as the new advisor (unlike the old self-service
+// flow it replaces).
+function AddAdvisorCard(props) {
+  var open = props.open, onToggle = props.onToggle, onAddAdvisor = props.onAddAdvisor;
+  var nameState = useState(""); var name = nameState[0], setName = nameState[1];
+  var codeState = useState(""); var code = codeState[0], setCode = codeState[1];
+  var busyState = useState(false); var busy = busyState[0], setBusy = busyState[1];
+  var errState = useState(""); var err = errState[0], setErr = errState[1];
+  var okState = useState(false); var justAdded = okState[0], setJustAdded = okState[1];
+ 
+  var submit = async function () {
+    if (busy) return;
+    var nm = name.trim(), cd = code.trim();
+    if (!nm || !cd) { setErr("Enter a name and a code."); return; }
+    if (cd.length < 4) { setErr("Code needs to be at least 4 characters."); return; }
+    setErr(""); setBusy(true);
+    var res = await onAddAdvisor({ name: nm, code: cd });
+    setBusy(false);
+    if (!res.ok) { setErr(res.message); return; }
+    setName(""); setCode("");
+    setJustAdded(true); setTimeout(function () { setJustAdded(false); }, 2000);
+  };
+ 
+  return h("div", null,
+    h("div", { className: "flex items-center justify-between mb-2.5" },
+      h(SectionTitle, { label: "Add Advisor", bare: true }),
+      h("button", { onClick: onToggle, style: { color: COLORS.brass }, className: "text-xs font-mono" }, open ? "cancel" : "+ add")
+    ),
+    open && h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4 space-y-2" },
+      h("div", { style: { color: COLORS.slate }, className: "text-[11px] leading-relaxed mb-1" },
+        "Creates the account directly \u2014 no approval step needed since you're the one adding it. They'll set their own PIN the first time they sign in."),
+      h("input", {
+        value: name, onChange: function (ev) { setName(ev.target.value); }, placeholder: "Full name",
+        style: { borderColor: COLORS.line, background: COLORS.parchment, color: COLORS.ink },
+        className: "w-full px-3 py-2.5 rounded-xl border outline-none focus:ring-2 text-sm"
+      }),
+      h("input", {
+        value: code, onChange: function (ev) { setCode(ev.target.value); }, onKeyDown: function (ev) { if (ev.key === "Enter") submit(); }, placeholder: "Advisor code",
+        style: { borderColor: COLORS.line, background: COLORS.parchment, color: COLORS.ink },
+        className: "w-full px-3 py-2.5 rounded-xl border outline-none focus:ring-2 font-mono text-sm"
+      }),
+      err && h("div", { style: { color: COLORS.rust }, className: "text-xs" }, err),
+      justAdded && h("div", { style: { color: COLORS.good }, className: "text-xs" }, "Added \u2014 they can sign in and set their PIN now."),
+      h("button", {
+        onClick: submit, disabled: busy,
+        style: { background: busy ? COLORS.line : COLORS.emphasis, opacity: busy ? 0.7 : 1 },
+        className: "w-full py-2.5 rounded-xl text-white text-sm font-semibold active:scale-[0.98] transition-transform"
+      }, busy ? "Adding\u2026" : "Add advisor")
+    )
+  );
+}
+ 
+// Self-signups from either app land here approved: false. A code input is
+// shown pre-filled with whatever code they entered (blank if they came
+// from the Script Tool's "Add a teammate", which never asks for one) —
+// Approve is disabled until a code is present, since the Dashboard's
+// entries/submissions/referrals are all keyed off the code, not the id.
+function PendingApprovalCard(props) {
+  var pendingRoster = props.pendingRoster, onApprove = props.onApprove, onReject = props.onReject;
+  return h("div", null,
+    h(SectionTitle, { label: "Pending Approval \u00b7 " + pendingRoster.length }),
+    h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border divide-y" },
+      pendingRoster.map(function (r) { return h(PendingRow, { key: r.id, row: r, onApprove: onApprove, onReject: onReject }); })
+    )
+  );
+}
+ 
+function PendingRow(props) {
+  var r = props.row, onApprove = props.onApprove, onReject = props.onReject;
+  var codeState = useState(r.code || ""); var code = codeState[0], setCode = codeState[1];
+  var busyState = useState(false); var busy = busyState[0], setBusy = busyState[1];
+  var errState = useState(""); var err = errState[0], setErr = errState[1];
+ 
+  var approve = async function () {
+    if (busy) return;
+    var cd = code.trim();
+    if (!cd) { setErr("Assign a code before approving."); return; }
+    setErr(""); setBusy(true);
+    var res = await onApprove(r.id, cd);
+    setBusy(false);
+    if (!res.ok) setErr(res.message);
+  };
+  var reject = function () {
+    if (window.confirm("Reject " + (r.name || "this signup") + "? This removes the request entirely — they'd have to sign up again.")) {
+      onReject(r.id);
+    }
+  };
+ 
+  return h("div", { className: "px-4 py-3 space-y-2" },
+    h("div", { style: { color: COLORS.ink }, className: "font-medium text-sm" }, r.name),
+    h("input", {
+      value: code, onChange: function (ev) { setCode(ev.target.value); }, placeholder: "Assign a code",
+      style: { borderColor: COLORS.line, background: COLORS.parchment, color: COLORS.ink },
+      className: "w-full px-3 py-2 rounded-xl border outline-none focus:ring-2 font-mono text-sm"
+    }),
+    err && h("div", { style: { color: COLORS.rust }, className: "text-xs" }, err),
+    h("div", { className: "flex gap-2" },
+      h("button", {
+        onClick: approve, disabled: busy,
+        style: { background: COLORS.good, opacity: busy ? 0.7 : 1 },
+        className: "flex-1 py-2 rounded-xl text-white text-xs font-semibold active:scale-[0.98] transition-transform"
+      }, busy ? "\u2026" : "Approve"),
+      h("button", {
+        onClick: reject,
+        style: { borderColor: COLORS.rust, color: COLORS.rust },
+        className: "px-3 py-2 rounded-xl border text-xs font-medium"
+      }, "Reject")
     )
   );
 }
@@ -1752,7 +2065,7 @@ function SubmissionBox(props) {
   var errState = useState(""); var error = errState[0], setError = errState[1];
   var busyState = useState(false); var busy = busyState[0], setBusy = busyState[1];
   var okState = useState(false); var justSaved = okState[0], setJustSaved = okState[1];
-
+ 
   var submit = async function () {
     if (busy) return;
     setError(""); setBusy(true);
@@ -1762,14 +2075,14 @@ function SubmissionBox(props) {
     setAmount(""); setSerial(""); setClientName("");
     setJustSaved(true); setTimeout(function () { setJustSaved(false); }, 2200);
   };
-
+ 
   var recent = mySubmissions.slice(0, 6);
-
+ 
   return h("div", { style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4" },
     h("div", { style: { color: COLORS.ink }, className: "font-medium text-sm" }, "FYP Submitted Today"),
     h("div", { style: { color: COLORS.slate }, className: "text-[11px] leading-relaxed mt-1 mb-3" },
       "Log the application you submitted. Your manager marks it settled once Sun Life approves it."),
-
+ 
     h("div", { className: "space-y-2" },
       h("input", {
         type: "number", min: 0, inputMode: "decimal", value: amount, placeholder: "FYP amount (\u20b1)",
@@ -1798,7 +2111,7 @@ function SubmissionBox(props) {
         className: "w-full py-2.5 rounded-xl text-white text-sm font-semibold active:scale-[0.98] transition-transform"
       }, busy ? "Saving\u2026" : "Add submission")
     ),
-
+ 
     h("div", { className: "flex items-center gap-4 mt-4 pt-3", style: { borderTop: "1px solid " + COLORS.line } },
       h("div", null,
         h("div", { style: { color: COLORS.slate }, className: "text-[10px] font-mono uppercase tracking-wide" }, "Submitted (mo)"),
@@ -1809,7 +2122,7 @@ function SubmissionBox(props) {
         h("div", { style: { color: COLORS.good }, className: "font-mono text-sm" }, fmtPhp(props.monthSettledMine))
       )
     ),
-
+ 
     recent.length > 0 && h("div", { className: "mt-3 space-y-1.5" },
       recent.map(function (s) {
         return h("div", {
@@ -1831,7 +2144,7 @@ function SubmissionBox(props) {
     )
   );
 }
-
+ 
 function SectionTitle(props) {
   return h("div", { className: props.bare ? "" : "mb-2.5" }, h("span", { style: { color: COLORS.ink }, className: "font-display text-base" }, props.label));
 }
@@ -1841,3 +2154,5 @@ ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 </script>
 </body>
 </html>
+ 
+COPY ABOVE THIS LINE

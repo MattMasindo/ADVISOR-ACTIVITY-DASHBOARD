@@ -926,6 +926,7 @@ function App() {
         todayRows: todayRows, monthBoards: monthBoards, referrals: referrals, onUpdateReferral: updateReferral,
         onDeleteReferral: deleteReferral,
         submissions: submissions, onSetSubmissionSettled: setSubmissionSettled,
+        onDeleteSubmission: deleteSubmission,
         onSetAdvisorActive: setAdvisorActive,
         pendingRoster: pendingRoster, onAddAdvisor: managerCreateAdvisor,
         onApproveAdvisor: approveAdvisor, onRejectAdvisor: rejectAdvisor
@@ -1578,6 +1579,7 @@ function ManagerView(props) {
     todayRows = props.todayRows || [], monthBoards = props.monthBoards || { pipeline: [], grind: [], grosser: [] }, referrals = props.referrals || [], onUpdateReferral = props.onUpdateReferral,
     onSetAdvisorActive = props.onSetAdvisorActive, onDeleteReferral = props.onDeleteReferral,
     submissions = props.submissions || [], onSetSubmissionSettled = props.onSetSubmissionSettled,
+    onDeleteSubmission = props.onDeleteSubmission,
     pendingRoster = props.pendingRoster || [], onAddAdvisor = props.onAddAdvisor,
     onApproveAdvisor = props.onApproveAdvisor, onRejectAdvisor = props.onRejectAdvisor;
   var selectedState = useState(null); var selected = selectedState[0], setSelected = selectedState[1];
@@ -1723,17 +1725,30 @@ function ManagerView(props) {
               h("div", { style: { color: COLORS.slate }, className: "text-[10px] font-mono truncate mt-0.5" },
                 s.app_serial + (s.client_name ? " \u00b7 " + s.client_name : "") + " \u00b7 " + shortDate(s.submitted_date))
             ),
-            isPending
-              ? h("button", {
-                  onClick: function () { onSetSubmissionSettled(s.id, true); },
-                  style: { background: COLORS.good },
-                  className: "px-3 py-2 rounded-xl text-white text-[12px] font-semibold shrink-0 active:scale-95"
-                }, "Mark settled")
-              : h("button", {
-                  onClick: function () { onSetSubmissionSettled(s.id, false); },
-                  style: { borderColor: COLORS.line, color: COLORS.slate },
-                  className: "px-3 py-2 rounded-xl border text-[12px] font-mono shrink-0 active:opacity-60"
-                }, "undo")
+            h("div", { className: "flex flex-col items-end gap-1.5 shrink-0" },
+              isPending
+                ? h("button", {
+                    onClick: function () { onSetSubmissionSettled(s.id, true); },
+                    style: { background: COLORS.good },
+                    className: "px-3 py-2 rounded-xl text-white text-[12px] font-semibold shrink-0 active:scale-95"
+                  }, "Mark settled")
+                : h("button", {
+                    onClick: function () { onSetSubmissionSettled(s.id, false); },
+                    style: { borderColor: COLORS.line, color: COLORS.slate },
+                    className: "px-3 py-2 rounded-xl border text-[12px] font-mono shrink-0 active:opacity-60"
+                  }, "undo"),
+              h("button", {
+                onClick: function () {
+                  var who = nameFor(s.advisor_code);
+                  var msg = s.settled
+                    ? "Delete this settled submission for " + who + "?\n\n" + fmtPhp(s.amount) + " (APP " + s.app_serial + ") has already been counted toward Top Grosser and this month's payouts. Deleting it removes that credit. This cannot be undone."
+                    : "Delete this submission for " + who + " (APP " + s.app_serial + ", " + fmtPhp(s.amount) + ")? This cannot be undone.";
+                  if (window.confirm(msg)) onDeleteSubmission(s.id);
+                },
+                style: { color: COLORS.rust },
+                className: "text-[11px] font-mono active:opacity-60"
+              }, "delete")
+            )
           );
         }
         return h("div", { className: "space-y-3" },

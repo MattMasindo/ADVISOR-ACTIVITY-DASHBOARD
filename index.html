@@ -313,15 +313,24 @@ function App() {
       setTargets(tMap);
       setHasManagerPin(!!pinRes.data);
  
-      if (myIdentity) {
-        var er = await sb.from("entries").select("*").eq("advisor_code", myIdentity.code);
-        var map = {};
-        (er.data || []).forEach(function (row) { map[row.entry_date] = row; });
-        setMyEntries(map);
-      }
+      if (myIdentity) await refreshMyEntries(myIdentity.code);
       setLoading(false);
     })();
   }, []);
+ 
+  // Re-fetches this advisor's own entries. Needed on top of the targeted
+  // per-tap re-fetch inside bump() — New Prospects and Chat Script Usage
+  // have no tap button at all now (auto-logged from the Script Tool), so
+  // without this, a value bumped from another device would sit frozen at
+  // whatever it was on page load until the advisor manually reloaded.
+  var refreshMyEntries = async function (code) {
+    var c = code || myCode;
+    if (!c) return;
+    var er = await sb.from("entries").select("*").eq("advisor_code", c);
+    var map = {};
+    (er.data || []).forEach(function (row) { map[row.entry_date] = row; });
+    setMyEntries(map);
+  };
  
   var loadTeamData = async function () {
     setTeamLoading(true);
@@ -373,6 +382,17 @@ function App() {
   useEffect(function () {
     if (view === "advisor" || view === "manager") loadTeamData();
   }, [view]);
+ 
+  // Auto-logged metrics (New Prospects, Chat Script Usage) have no tap
+  // button to trigger a targeted re-fetch any more, so this polls while
+  // the Advisor tab is open — same "just update in the background"
+  // approach the Script Tool already uses for its own sync.
+  useEffect(function () {
+    if (view !== "advisor" || !myCode) return;
+    refreshMyEntries(myCode);
+    var iv = setInterval(function () { refreshMyEntries(myCode); }, 20000);
+    return function () { clearInterval(iv); };
+  }, [view, myCode]);
  
   useEffect(function () {
     if (isRecruitment || (view === "recruitment" && isManager)) loadRecruitmentData();
@@ -762,7 +782,8 @@ function App() {
         monthSubmittedMine: monthSubmitted[myCode] || 0, monthSettledMine: monthSettled[myCode] || 0,
         todayTotals: todayTotals, socialToday: socialToday,
         teamCount: new Set(todayRows.map(function (e) { return e.advisor_code; })).size,
-        leaderboard: leaderboard, trendData: trendData, funnelData: funnelData, myCode: myCode, loading: teamLoading, onRefresh: loadTeamData,
+        leaderboard: leaderboard, trendData: trendData, funnelData: funnelData, myCode: myCode, loading: teamLoading,
+        onRefresh: function () { loadTeamData(); refreshMyEntries(myCode); },
         myWeekDayLabels: myWeekDayLabels, monthBoards: monthBoards, myReferrals: myReferrals,
         currentStreak: currentStreak, bestStreak: bestStreak, onAddReferral: function (name) { return addReferral(name, myCode); }
       }),
@@ -2166,4 +2187,3 @@ ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 </script>
 </body>
 </html>
- 

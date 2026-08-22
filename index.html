@@ -43,10 +43,18 @@ var COLORS = {
   line: "#2A3244", good: "#2DD4BF", emphasis: "#FF6A3D"
 };
  
+// `auto: true` metrics are driven entirely by the Script Tool now (New
+// Prospects from the Names List, Chat Script Usage from step advances) —
+// AdvisorView renders these as read-only counts, no tap buttons. Appts,
+// presented, and closed stay manually tappable here; Appointments Set also
+// gets a +1 from the Script Tool when a conversation reaches a confirmed
+// appointment, on top of whatever's tapped manually — the two add together.
+// "Relationship Touches" is retired as its own tracked metric (folded into
+// Chat Script Usage) — its historical column (`relationship`) is left
+// untouched in the database, just no longer displayed or targeted here.
 var METRICS = [
-  { key: "prospecting", label: "New Prospects", short: "Prospecting", color: COLORS.slate },
-  { key: "approaching", label: "Initial Approaches", short: "Approaching", color: COLORS.brassLight },
-  { key: "relationship", label: "Relationship Touches", short: "Relationship", color: COLORS.inkLight },
+  { key: "prospecting", label: "New Prospects", short: "Prospecting", color: COLORS.slate, auto: true },
+  { key: "approaching", label: "Chat Script Usage", short: "Script Usage", color: COLORS.brassLight, auto: true },
   { key: "appts", label: "Appointments Set", short: "Appointments", color: COLORS.brass },
   { key: "presented", label: "Clients Presented", short: "Presented", color: COLORS.ink },
   { key: "closed", label: "Clients Closed", short: "Closed", color: COLORS.rust }
@@ -93,7 +101,7 @@ function weekdayLabel(dateStr) {
   return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()];
 }
 function isFullFunnel(e) {
-  return !!e && (e.prospecting || 0) >= 1 && (e.relationship || 0) >= 1 && !!e.social;
+  return !!e && (e.prospecting || 0) >= 1 && (e.approaching || 0) >= 1 && !!e.social;
 }
 function referralStatus(r) {
   if (r.retained_paid) return "Fully paid";
@@ -115,7 +123,7 @@ var LANE_MINIMUMS = { grind: 15 };
  
 function laneBasisText(laneKey, value) {
   if (laneKey === "grosser") return fmtPhp(value) + " settled FYP";
-  if (laneKey === "pipeline") return value + " prospects + approaches";
+  if (laneKey === "pipeline") return value + " new prospects";
   if (laneKey === "grind") return value + " clients presented";
   return String(value);
 }
@@ -197,7 +205,7 @@ function currentStreakFrom(entriesMap) {
 var WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
 var BADGE_LEVELS = [10, 20, 30, 45, 90];
 var LANES = [
-  { key: "pipeline", label: "Pipeline Builder", hint: "New prospects + initial approaches, this month" },
+  { key: "pipeline", label: "Pipeline Builder", hint: "New prospects, this month" },
   { key: "grind", label: "Grind Master", hint: "Clients presented (FNA), this month · min. 15" },
   { key: "grosser", label: "Top Grosser", hint: "FYP settled (manager-verified), this month" }
 ];
@@ -626,7 +634,7 @@ function App() {
       if (!advisor2) return;
       monthBoard[e.advisor_code] = { code: e.advisor_code, name: advisor2.name, pipeline: 0, grind: 0, grosser: 0 };
     }
-    monthBoard[e.advisor_code].pipeline += (e.prospecting || 0) + (e.approaching || 0);
+    monthBoard[e.advisor_code].pipeline += (e.prospecting || 0);
     monthBoard[e.advisor_code].grind += (e.presented || 0);
     // grosser intentionally NOT summed from entries.fyp any more - see below
   });
@@ -1129,7 +1137,7 @@ function AdvisorView(props) {
   var totalToday = entryTotal(entry);
   var showNudge = new Date().getHours() >= 15 && totalToday === 0;
  
-  var met = [(entry.prospecting || 0) >= 1, (entry.relationship || 0) >= 1, !!entry.social];
+  var met = [(entry.prospecting || 0) >= 1, (entry.approaching || 0) >= 1, !!entry.social];
   var progress = met.filter(Boolean).length;
   var full = progress === 3;
   var CIRC = 327;
@@ -1201,7 +1209,7 @@ function AdvisorView(props) {
         h("div", { style: { color: COLORS.ink }, className: "font-display text-lg" }, full ? "Full funnel day" : "Building momentum"),
         h("div", { style: { color: COLORS.slate }, className: "text-[11px] mt-1.5 space-y-0.5" },
           h("div", null, (met[0] ? "\u2713" : "\u25cb") + " New prospect logged"),
-          h("div", null, (met[1] ? "\u2713" : "\u25cb") + " Relationship touch logged"),
+          h("div", null, (met[1] ? "\u2713" : "\u25cb") + " Chat Script used"),
           h("div", null, (met[2] ? "\u2713" : "\u25cb") + " Social post marked")
         ),
         full && h("div", { style: { background: "rgba(255,106,61,0.16)", color: COLORS.emphasis }, className: "inline-block text-[10px] font-semibold px-2.5 py-1 rounded-lg mt-2" }, "Daily pacesetter")
@@ -1315,13 +1323,17 @@ function AdvisorView(props) {
           return h("div", { key: m.key, style: { background: COLORS.card, borderColor: COLORS.line }, className: "rounded-2xl border p-4 flex items-center justify-between" },
             h("div", null,
               h("div", { style: { color: COLORS.ink }, className: "font-medium text-sm" }, m.label),
-              target > 0 && h("div", { style: { color: hit ? COLORS.good : COLORS.slate }, className: "text-[10px] font-mono mt-0.5" }, "target " + target + (hit ? " \u2713" : ""))
+              m.auto
+                ? h("div", { style: { color: COLORS.inkLight }, className: "text-[10px] font-mono mt-0.5" }, "auto \u00b7 from the Script Tool")
+                : (target > 0 && h("div", { style: { color: hit ? COLORS.good : COLORS.slate }, className: "text-[10px] font-mono mt-0.5" }, "target " + target + (hit ? " \u2713" : "")))
             ),
-            h("div", { className: "flex items-center gap-3" },
-              h("button", { onClick: function () { onBump(m.key, -1); }, style: { borderColor: COLORS.line, color: COLORS.slate }, className: "w-9 h-9 rounded-full border flex items-center justify-center active:scale-95" }, "\u2013"),
-              h("div", { style: { color: COLORS.ink }, className: "font-mono text-xl w-7 text-center " + (pulse === m.key ? "pop" : "") }, val),
-              h("button", { onClick: function () { onBump(m.key, 1); }, style: { background: COLORS.emphasis }, className: "w-9 h-9 rounded-full text-white flex items-center justify-center active:scale-95" }, "+")
-            )
+            m.auto
+              ? h("div", { style: { color: COLORS.ink }, className: "font-mono text-xl w-7 text-center " + (pulse === m.key ? "pop" : "") }, val)
+              : h("div", { className: "flex items-center gap-3" },
+                  h("button", { onClick: function () { onBump(m.key, -1); }, style: { borderColor: COLORS.line, color: COLORS.slate }, className: "w-9 h-9 rounded-full border flex items-center justify-center active:scale-95" }, "\u2013"),
+                  h("div", { style: { color: COLORS.ink }, className: "font-mono text-xl w-7 text-center " + (pulse === m.key ? "pop" : "") }, val),
+                  h("button", { onClick: function () { onBump(m.key, 1); }, style: { background: COLORS.emphasis }, className: "w-9 h-9 rounded-full text-white flex items-center justify-center active:scale-95" }, "+")
+                )
           );
         }),
         h(SubmissionBox, {
@@ -2155,4 +2167,3 @@ ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 </body>
 </html>
  
-COPY ABOVE THIS LINE
